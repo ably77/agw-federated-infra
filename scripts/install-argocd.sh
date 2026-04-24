@@ -144,8 +144,8 @@ install_argocd() {
 # Get ArgoCD admin password
 # =============================================================================
 get_argocd_password() {
-  kubectl get secret argocd-initial-admin-secret -n argocd \
-    --context "$HUB_CTX" -o jsonpath='{.data.password}' | base64 -d
+  # Static password was set during install -- return it directly
+  echo "solo.io"
 }
 
 # =============================================================================
