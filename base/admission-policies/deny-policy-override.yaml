@@ -32,7 +32,9 @@ spec:
               - kind: ServiceAccount
                 name: argocd-manager
                 namespace: kube-system
+      skipBackgroundRequests: true
       validate:
+        allowExistingViolations: true
         message: >-
           Policy resources in the agentgateway-system namespace can only be
           managed via the infra git repo.
