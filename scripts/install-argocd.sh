@@ -123,6 +123,13 @@ install_argocd() {
   kubectl wait --for=condition=available deploy/argocd-server \
     -n argocd --context "$HUB_CTX" --timeout=180s
 
+  # Colima: switch to NodePort immediately (port-forward is unreliable)
+  if [ "$PLATFORM" = "colima" ]; then
+    kubectl patch svc argocd-server -n argocd --context "$HUB_CTX" \
+      -p '{"spec":{"type":"NodePort"}}' --type=merge
+    echo "ArgoCD service patched to NodePort."
+  fi
+
   echo "ArgoCD installed on $HUB_CTX."
 }
 
@@ -146,11 +153,6 @@ argocd_login() {
   password=$(get_argocd_password)
 
   if [ "$PLATFORM" = "colima" ]; then
-    # Patch to NodePort and get the assigned port
-    kubectl patch svc argocd-server -n argocd --context "$HUB_CTX" \
-      -p '{"spec":{"type":"NodePort"}}' --type=merge 2>/dev/null || true
-    sleep 2
-
     local nodeport
     nodeport=$(kubectl get svc argocd-server -n argocd --context "$HUB_CTX" \
       -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}')
@@ -196,7 +198,7 @@ get_leaf_server_url() {
     return
   fi
 
-  # Colima: find VM IP + k3s listening port
+  # Colima: find VM IP + k3s API port
   local vm_ip api_port
 
   # Get VM IP
@@ -206,17 +208,12 @@ get_leaf_server_url() {
     return 1
   fi
 
-  # Get k3s API port (listening on all interfaces inside the VM)
-  api_port=$(colima ssh --profile "$leaf_ctx" -- ss -tlnp 2>/dev/null \
-    | grep '\*:' | awk '{print $4}' | grep -oE '[0-9]+' | head -1)
-  if [ -z "$api_port" ]; then
-    # Fallback: extract port from kubeconfig
-    local cluster_name
-    cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$leaf_ctx\")].context.cluster}" 2>/dev/null)
-    local server_url
-    server_url=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$cluster_name\")].cluster.server}" 2>/dev/null)
-    api_port=$(echo "$server_url" | sed 's|.*:\([0-9]*\)$|\1|')
-  fi
+  # Get k3s API port from kubeconfig (the port forwarded into the VM)
+  local cluster_name
+  cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$leaf_ctx\")].context.cluster}" 2>/dev/null)
+  local server_url
+  server_url=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$cluster_name\")].cluster.server}" 2>/dev/null)
+  api_port=$(echo "$server_url" | sed 's|.*:\([0-9]*\)$|\1|')
 
   echo "https://${vm_ip}:${api_port}"
 }

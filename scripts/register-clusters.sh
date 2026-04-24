@@ -41,10 +41,11 @@ if [ "$PLATFORM" = "colima" ]; then
 
     echo "Registering $leaf_name ($leaf_ctx)..."
 
-    # Get current VM IP and k3s port
+    # Get current VM IP and k3s API port (from kubeconfig)
     vm_ip=$(colima ssh --profile "$leaf_ctx" -- hostname -I 2>/dev/null | awk '{print $1}')
-    api_port=$(colima ssh --profile "$leaf_ctx" -- ss -tlnp 2>/dev/null \
-      | grep '\*:' | awk '{print $4}' | grep -oE '[0-9]+' | head -1)
+    cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$leaf_ctx\")].context.cluster}" 2>/dev/null)
+    kube_server=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$cluster_name\")].cluster.server}" 2>/dev/null)
+    api_port=$(echo "$kube_server" | sed 's|.*:\([0-9]*\)$|\1|')
     server_url="https://${vm_ip}:${api_port}"
     echo "  Server URL: $server_url"
 
