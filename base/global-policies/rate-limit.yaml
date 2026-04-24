@@ -1,0 +1,34 @@
+apiVersion: ratelimit.solo.io/v1alpha1
+kind: RateLimitConfig
+metadata:
+  name: wgu-enrollment-token-limit
+  namespace: agentgateway-system
+spec:
+  raw:
+    descriptors:
+    - key: generic_key
+      value: wgu-enrollment
+      rateLimit:
+        requestsPerUnit: 100000
+        unit: HOUR
+    rateLimits:
+    - actions:
+      - genericKey:
+          descriptorValue: wgu-enrollment
+      type: TOKEN
+---
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: wgu-enrollment-rate-limit
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - name: wgu-enrollment
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+  traffic:
+    entRateLimit:
+      global:
+        rateLimitConfigRefs:
+        - name: wgu-enrollment-token-limit

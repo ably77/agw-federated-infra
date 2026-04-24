@@ -1,0 +1,16 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: gateway-to-financial-aid
+  namespace: wgu-demo
+spec:
+  targetRefs:
+  - kind: Service
+    group: ""
+    name: financial-aid-mcp
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - "*/ns/agentgateway-system/sa/agentgateway-proxy"

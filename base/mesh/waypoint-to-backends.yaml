@@ -1,0 +1,12 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: waypoint-to-backends
+  namespace: wgu-demo
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - "*/ns/wgu-demo/sa/wgu-demo-waypoint"

@@ -1,0 +1,50 @@
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: wgu-enrollment-guardrails
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: wgu-enrollment
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - regex:
+            action: Reject
+            builtins:
+            - CreditCard
+            - Ssn
+          response:
+            message: "Request blocked: personally identifiable information (PII) detected. Do not include SSNs or credit card numbers in prompts. This policy enforces FERPA compliance."
+            statusCode: 422
+        - regex:
+            action: Reject
+            matches:
+            - "(?i)(ignore|disregard|forget|override|bypass)\\s+(all\\s+|any\\s+|your\\s+)?(previous|prior|earlier|above|existing)\\s+(instructions|rules|guidelines|directives)"
+            - "(?i)(you are now|from now on you are|henceforth you are)\\s+(a |an |the )?(unrestricted|unfiltered|uncensored|DAN)"
+            - "(?i)(do anything now|DAN mode|enable DAN|activate DAN)"
+          response:
+            message: "Request blocked: prompt injection attempt detected."
+            statusCode: 403
+        - regex:
+            action: Reject
+            matches:
+            - "\\bAKIA[0-9A-Z]{16}\\b"
+            - "\\bsk-[a-zA-Z0-9_-]{20,}\\b"
+            - "-----BEGIN\\s+(RSA\\s+|EC\\s+)?PRIVATE KEY-----"
+            - "(?i)(password|secret|token|api[_-]?key)\\s*[=:]\\s*[\"']?[^\\s\"']{8,}"
+          response:
+            message: "Request blocked: credential or secret detected in prompt."
+            statusCode: 422
+        response:
+        - regex:
+            action: Mask
+            builtins:
+            - CreditCard
+            - Ssn
+            - PhoneNumber
+          response:
+            message: "Response filtered: PII redacted from model output."

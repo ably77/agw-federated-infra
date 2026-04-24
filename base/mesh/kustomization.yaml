@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deny-all.yaml
+  - waypoint.yaml
+  - chatbot-to-data-product.yaml
+  - data-product-to-graphdb.yaml
+  - gateway-to-financial-aid.yaml
+  - ingress-to-chatbot.yaml
+  - waypoint-to-backends.yaml

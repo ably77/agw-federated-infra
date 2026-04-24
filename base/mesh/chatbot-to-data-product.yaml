@@ -1,0 +1,16 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: chatbot-to-data-product
+  namespace: wgu-demo
+spec:
+  targetRefs:
+  - kind: Service
+    group: ""
+    name: data-product-api
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - "*/ns/wgu-demo-frontend/sa/enrollment-chatbot"
