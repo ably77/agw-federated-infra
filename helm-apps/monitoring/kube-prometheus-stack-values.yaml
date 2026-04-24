@@ -1,0 +1,20 @@
+alertmanager:
+  enabled: false
+grafana:
+  adminPassword: "prom-operator"
+  service:
+    type: ClusterIP
+    port: 3000
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: monitoring
+nodeExporter:
+  enabled: false
+prometheus:
+  prometheusSpec:
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false

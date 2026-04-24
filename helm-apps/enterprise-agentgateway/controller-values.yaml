@@ -1,0 +1,6 @@
+gatewayClassParametersRefs:
+  enterprise-agentgateway:
+    group: enterpriseagentgateway.solo.io
+    kind: EnterpriseAgentgatewayParameters
+    name: agentgateway-config
+    namespace: agentgateway-system

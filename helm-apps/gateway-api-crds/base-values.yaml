@@ -1,0 +1,4 @@
+# Gateway API CRDs are applied via raw directory, not Helm.
+# This file exists for documentation -- the actual version is pinned
+# in the ApplicationSet targetRevision (v1.5.0).
+{}

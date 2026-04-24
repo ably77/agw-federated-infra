@@ -1,0 +1,10 @@
+profile: ambient
+ambient:
+  dnsCapture: true
+excludeNamespaces:
+  - istio-system
+  - kube-system
+global:
+  hub: us-docker.pkg.dev/soloio-img/istio
+  tag: 1.29.0-solo
+  variant: distroless

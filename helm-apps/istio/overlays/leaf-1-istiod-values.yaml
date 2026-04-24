@@ -1,0 +1,6 @@
+global:
+  multiCluster:
+    clusterName: cluster2
+  network: cluster2
+meshConfig:
+  trustDomain: cluster2.local
