@@ -18,3 +18,10 @@ metadata:
   name: kagent
   labels:
     istio.io/dataplane-mode: ambient
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: solo-enterprise
+  labels:
+    istio.io/dataplane-mode: ambient

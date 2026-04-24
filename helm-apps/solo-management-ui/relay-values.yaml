@@ -1,0 +1,5 @@
+tunnel:
+  fqdn: solo-enterprise-ui.kagent.mesh.internal
+  port: 9000
+telemetry:
+  fqdn: solo-enterprise-telemetry-gateway.kagent.mesh.internal
