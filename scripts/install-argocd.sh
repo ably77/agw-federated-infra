@@ -490,6 +490,21 @@ inject_peering_addresses() {
 }
 
 # =============================================================================
+# Label Solo Enterprise services as global for cross-cluster mesh visibility
+# =============================================================================
+label_global_services() {
+  echo "=== Labeling global services ==="
+
+  # Solo Management UI services on leaf-1 (relay on leaf-2 connects via mesh.internal)
+  for svc in solo-enterprise-ui solo-enterprise-telemetry-gateway; do
+    kubectl label svc "$svc" -n kagent --context "$LEAF1_CTX" \
+      solo.io/service-scope=global --overwrite 2>/dev/null || true
+  done
+
+  echo "Global service labels applied."
+}
+
+# =============================================================================
 # Create LLM secrets on leaf clusters
 # =============================================================================
 create_secrets() {
@@ -721,4 +736,5 @@ inject_license_key
 label_istio_networks
 wait_for_sync || true
 inject_peering_addresses
+label_global_services
 print_access_info
