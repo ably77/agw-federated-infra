@@ -1,5 +1,6 @@
 global:
   multiCluster:
     clusterName: cluster3
+network: cluster3
 env:
   CLUSTER_ID: cluster3
