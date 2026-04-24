@@ -36,6 +36,11 @@ configs:
       name: enterprise-agentgateway
       url: us-docker.pkg.dev/solo-public/enterprise-agentgateway/charts
       enableOCI: "true"
+    solo-management-ui:
+      type: helm
+      name: solo-management-ui
+      url: us-docker.pkg.dev/developers-369321/solo-enterprise-public-nonprod
+      enableOCI: "true"
     kyverno:
       type: helm
       name: kyverno

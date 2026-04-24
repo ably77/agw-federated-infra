@@ -11,3 +11,10 @@ metadata:
   name: wgu-demo-frontend
   labels:
     istio.io/dataplane-mode: ambient
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kagent
+  labels:
+    istio.io/dataplane-mode: ambient

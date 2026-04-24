@@ -362,8 +362,9 @@ apply_argocd_resources() {
 # (Keeps the license out of git -- applied directly on the cluster)
 # =============================================================================
 inject_license_key() {
-  echo "=== Injecting license key into enterprise-agw ApplicationSet ==="
+  echo "=== Injecting license key into ApplicationSets ==="
 
+  # Enterprise AgentGateway
   kubectl patch applicationset enterprise-agw -n argocd --context "$HUB_CTX" \
     --type=json -p="[
       {
@@ -373,7 +374,17 @@ inject_license_key() {
       }
     ]"
 
-  echo "License key injected."
+  # Solo Management UI
+  kubectl patch applicationset solo-management-ui -n argocd --context "$HUB_CTX" \
+    --type=json -p="[
+      {
+        \"op\": \"add\",
+        \"path\": \"/spec/template/spec/sources/0/helm/parameters\",
+        \"value\": [{\"name\": \"licensing.licenseKey\", \"value\": \"$SOLO_TRIAL_LICENSE_KEY\"}]
+      }
+    ]"
+
+  echo "License keys injected."
 }
 
 # =============================================================================
@@ -573,6 +584,10 @@ print_access_info() {
   fi
 
   echo "Port-forward access (works on all platforms):"
+  echo ""
+  echo "Solo Management UI (leaf-1):"
+  echo "  kubectl port-forward svc/solo-enterprise-ui -n kagent 4000:80 --context $LEAF1_CTX"
+  echo "  URL: http://localhost:4000"
   echo ""
   echo "Enrollment Chatbot (leaf-1):"
   echo "  kubectl port-forward svc/enrollment-chatbot -n wgu-demo-frontend 8501:8501 --context $LEAF1_CTX"
