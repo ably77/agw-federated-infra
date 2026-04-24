@@ -12,6 +12,7 @@ spec:
         selector:
           matchLabels:
             agw-role: leaf
+            agw-leaf-name: leaf-1
   template:
     metadata:
       name: 'solo-mgmt-ui-{{name}}'
@@ -41,8 +42,8 @@ spec:
           - CreateNamespace=true
           - ServerSideApply=true
 ---
-# Solo Enterprise Relay -- feeds telemetry from each leaf cluster back
-# to the management UI for multi-cluster visibility
+# Solo Enterprise Relay -- feeds telemetry from leaf-2 back
+# to the management UI on leaf-1
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -54,6 +55,7 @@ spec:
         selector:
           matchLabels:
             agw-role: leaf
+            agw-leaf-name: leaf-2
   template:
     metadata:
       name: 'solo-relay-{{name}}'

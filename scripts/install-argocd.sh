@@ -594,7 +594,7 @@ print_access_info() {
   echo "  URL: http://localhost:8501"
   echo ""
   echo "Grafana (leaf-1):"
-  echo "  kubectl port-forward svc/grafana-prometheus -n monitoring 3000:3000 --context $LEAF1_CTX"
+  echo "  kubectl port-forward svc/kube-prometheus-leaf-1-grafana -n monitoring 3000:3000 --context $LEAF1_CTX"
   echo "  URL: http://localhost:3000 (admin / prom-operator)"
   echo ""
   echo "Enrollment Chatbot (leaf-2):"
