@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kube-prometheus
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            agw-role: leaf
+  template:
+    metadata:
+      name: 'kube-prometheus-{{name}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "8"
+    spec:
+      project: platform
+      sources:
+        - repoURL: https://prometheus-community.github.io/helm-charts
+          chart: kube-prometheus-stack
+          targetRevision: 80.*
+          helm:
+            valueFiles:
+              - $values/helm-apps/monitoring/kube-prometheus-stack-values.yaml
+        - repoURL: https://github.com/ably77/agw-federated-infra.git
+          targetRevision: main
+          ref: values
+      destination:
+        server: '{{server}}'
+        namespace: monitoring
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

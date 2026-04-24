@@ -1,0 +1,77 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: enterprise-agw-crds
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            agw-role: leaf
+  template:
+    metadata:
+      name: 'enterprise-agw-crds-{{name}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "5"
+    spec:
+      project: platform
+      sources:
+        - repoURL: us-docker.pkg.dev/solo-public/enterprise-agentgateway/charts
+          chart: enterprise-agentgateway-crds
+          targetRevision: v2.3.0
+          helm:
+            valueFiles:
+              - $values/helm-apps/enterprise-agentgateway/crds-values.yaml
+        - repoURL: https://github.com/ably77/agw-federated-infra.git
+          targetRevision: main
+          ref: values
+      destination:
+        server: '{{server}}'
+        namespace: agentgateway-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: enterprise-agw
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            agw-role: leaf
+  template:
+    metadata:
+      name: 'enterprise-agw-{{name}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "6"
+    spec:
+      project: platform
+      sources:
+        - repoURL: us-docker.pkg.dev/solo-public/enterprise-agentgateway/charts
+          chart: enterprise-agentgateway
+          targetRevision: v2.3.0
+          helm:
+            valueFiles:
+              - $values/helm-apps/enterprise-agentgateway/controller-values.yaml
+        - repoURL: https://github.com/ably77/agw-federated-infra.git
+          targetRevision: main
+          ref: values
+      destination:
+        server: '{{server}}'
+        namespace: agentgateway-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

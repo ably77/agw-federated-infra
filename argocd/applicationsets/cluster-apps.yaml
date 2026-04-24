@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: agw-cluster-apps
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            agw-role: leaf
+        values:
+          clusterRepo: '{{metadata.labels.agw-cluster-repo}}'
+  template:
+    metadata:
+      name: 'agw-cluster-{{name}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "20"
+    spec:
+      project: developers
+      source:
+        repoURL: '{{values.clusterRepo}}'
+        targetRevision: main
+        path: '.'
+      destination:
+        server: '{{server}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

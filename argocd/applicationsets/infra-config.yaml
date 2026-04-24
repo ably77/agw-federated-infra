@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: agw-infra-config
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            agw-role: leaf
+        values:
+          overlay: '{{metadata.labels.agw-leaf-name}}'
+  template:
+    metadata:
+      name: 'agw-infra-config-{{name}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "10"
+    spec:
+      project: platform
+      source:
+        repoURL: https://github.com/ably77/agw-federated-infra.git
+        targetRevision: main
+        path: 'overlays/{{values.overlay}}'
+      destination:
+        server: '{{server}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
