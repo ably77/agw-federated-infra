@@ -10,7 +10,7 @@ spec:
           matchLabels:
             agw-role: leaf
         values:
-          clusterRepo: '{{metadata.labels.agw-cluster-repo}}'
+          clusterRepo: '{{metadata.annotations.agw-cluster-repo}}'
   template:
     metadata:
       name: 'agw-cluster-{{name}}'

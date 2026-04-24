@@ -21,17 +21,16 @@ echo "=== Re-registering leaf clusters ==="
 PASSWORD=$(kubectl get secret argocd-initial-admin-secret -n argocd \
   --context "$HUB_CTX" -o jsonpath='{.data.password}' | base64 -d)
 
-# Port-forward ArgoCD
-kubectl port-forward svc/argocd-server -n argocd 8443:443 \
+# Port-forward ArgoCD (port 80 since server runs --insecure)
+kubectl port-forward svc/argocd-server -n argocd 8443:80 \
   --context "$HUB_CTX" &>/dev/null &
 PF_PID=$!
-sleep 3
+sleep 5
 
 argocd login localhost:8443 \
   --username admin \
   --password "$PASSWORD" \
-  --insecure \
-  --grpc-web
+  --plaintext
 
 # Remove old registrations
 for name in leaf-1 leaf-2; do

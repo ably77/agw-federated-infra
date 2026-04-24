@@ -10,6 +10,8 @@ configs:
   cm:
     helm.enabled: "true"
     timeout.reconciliation: 180s
+    resource.compareoptions: |
+      ignoreResourceStatusField: all
     resource.exclusions: |
       - apiGroups:
           - cilium.io
@@ -17,6 +19,12 @@ configs:
           - CiliumIdentity
         clusters:
           - "*"
+    resource.customizations.ignoreDifferences.apps_StatefulSet: |
+      jqPathExpressions:
+        - .status
+    resource.customizations.ignoreDifferences.apps_Deployment: |
+      jqPathExpressions:
+        - .status
   repositories:
     solo-istio-helm:
       type: helm
@@ -53,8 +61,8 @@ applicationSet:
 controller:
   resources:
     requests:
-      cpu: 250m
-      memory: 256Mi
-    limits:
       cpu: 500m
       memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi

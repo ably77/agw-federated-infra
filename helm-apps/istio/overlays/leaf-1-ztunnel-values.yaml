@@ -1,0 +1,5 @@
+global:
+  multiCluster:
+    clusterName: cluster2
+env:
+  CLUSTER_ID: cluster2

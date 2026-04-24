@@ -201,17 +201,16 @@ register_clusters() {
   local password
   password=$(get_argocd_password)
 
-  # Port-forward ArgoCD for CLI access
-  kubectl port-forward svc/argocd-server -n argocd 8443:443 \
+  # Port-forward ArgoCD for CLI access (port 80 since server runs --insecure)
+  kubectl port-forward svc/argocd-server -n argocd 8443:80 \
     --context "$HUB_CTX" &>/dev/null &
   local pf_pid=$!
-  sleep 3
+  sleep 5
 
   argocd login localhost:8443 \
     --username admin \
     --password "$password" \
-    --insecure \
-    --grpc-web
+    --plaintext
 
   # Register each leaf cluster
   local leaf_name leaf_ctx
@@ -405,7 +404,7 @@ print_access_info() {
   echo "Platform: $PLATFORM"
   echo ""
   echo "ArgoCD UI:"
-  echo "  kubectl port-forward svc/argocd-server -n argocd 8080:443 --context $HUB_CTX"
+  echo "  kubectl port-forward svc/argocd-server -n argocd 8080:80 --context $HUB_CTX"
   echo "  URL: https://localhost:8080"
   echo "  Username: admin"
   echo "  Password: $password"

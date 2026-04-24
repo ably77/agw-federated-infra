@@ -175,6 +175,7 @@ spec:
           helm:
             valueFiles:
               - $values/helm-apps/istio/ztunnel-values.yaml
+              - $values/helm-apps/istio/overlays/{{name}}-ztunnel-values.yaml
         - repoURL: https://github.com/ably77/agw-federated-infra.git
           targetRevision: main
           ref: values
