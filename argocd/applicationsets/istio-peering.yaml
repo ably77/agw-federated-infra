@@ -77,9 +77,15 @@ spec:
       destination:
         server: '{{server}}'
         namespace: istio-eastwest
+      ignoreDifferences:
+        - group: gateway.networking.k8s.io
+          kind: Gateway
+          jqPathExpressions:
+            - .spec.addresses
       syncPolicy:
         automated:
           prune: true
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
+          - RespectIgnoreDifferences=true
