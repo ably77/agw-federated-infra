@@ -21,12 +21,12 @@ spec:
       ignoreDifferences:
         - group: enterpriseagentgateway.solo.io
           kind: EnterpriseAgentgatewayPolicy
-          jsonPointers:
-            - /metadata
+          managedFieldsManagers:
+            - enterprise-agentgateway
         - group: kyverno.io
           kind: ClusterPolicy
-          jsonPointers:
-            - /metadata
+          managedFieldsManagers:
+            - kyverno
       source:
         repoURL: https://github.com/ably77/agw-federated-infra.git
         targetRevision: main
