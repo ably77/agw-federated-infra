@@ -1,12 +1,12 @@
-# Remote peer: leaf-2 reaches leaf-1 (cluster2)
+# Remote peer: leaf-2 reaches leaf-1
 # address is injected by install script after east-west gateways are up
 remote:
   create: true
   items:
-    - name: istio-remote-peer-cluster2
-      cluster: cluster2
-      network: cluster2
+    - name: istio-remote-peer-leaf-1
+      cluster: leaf-1
+      network: leaf-1
       addressType: IPAddress
       address: "PLACEHOLDER"
       preferredDataplaneServiceType: loadbalancer
-      trustDomain: cluster2.local
+      trustDomain: leaf-1.local

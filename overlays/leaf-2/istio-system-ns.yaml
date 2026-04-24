@@ -3,4 +3,4 @@ kind: Namespace
 metadata:
   name: istio-system
   labels:
-    topology.istio.io/network: cluster3
+    topology.istio.io/network: leaf-2

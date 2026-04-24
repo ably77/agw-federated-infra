@@ -1,3 +1,3 @@
 eastwest:
-  cluster: cluster3
-  network: cluster3
+  cluster: leaf-2
+  network: leaf-2

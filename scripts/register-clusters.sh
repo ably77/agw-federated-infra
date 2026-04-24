@@ -11,9 +11,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-HUB_CTX="${HUB_CTX:-cluster1}"
-LEAF1_CTX="${LEAF1_CTX:-cluster2}"
-LEAF2_CTX="${LEAF2_CTX:-cluster3}"
+HUB_CTX="${HUB_CTX:-hub-1}"
+LEAF1_CTX="${LEAF1_CTX:-leaf-1}"
+LEAF2_CTX="${LEAF2_CTX:-leaf-2}"
 
 # Detect platform from hub context
 detect_platform() {
@@ -26,6 +26,14 @@ detect_platform() {
     *127.0.0.1*|*localhost*) echo "colima" ;;
     *) echo "unknown" ;;
   esac
+}
+
+# Resolve Colima profile name from kubectl context
+get_colima_profile() {
+  local ctx=$1
+  local cluster_name
+  cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$ctx\")].context.cluster}" 2>/dev/null)
+  echo "${cluster_name#colima-}"
 }
 
 PLATFORM=$(detect_platform "$HUB_CTX")
@@ -42,7 +50,8 @@ if [ "$PLATFORM" = "colima" ]; then
     echo "Registering $leaf_name ($leaf_ctx)..."
 
     # Get current VM IP and k3s API port (from kubeconfig)
-    vm_ip=$(colima ssh --profile "$leaf_ctx" -- hostname -I 2>/dev/null | awk '{print $1}')
+    colima_profile=$(get_colima_profile "$leaf_ctx")
+    vm_ip=$(colima ssh --profile "$colima_profile" -- hostname -I 2>/dev/null | awk '{print $1}')
     cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$leaf_ctx\")].context.cluster}" 2>/dev/null)
     kube_server=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$cluster_name\")].cluster.server}" 2>/dev/null)
     api_port=$(echo "$kube_server" | sed 's|.*:\([0-9]*\)$|\1|')

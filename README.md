@@ -13,7 +13,7 @@ Platform-team owned repository for the [AGW Federated GitOps Reference Architect
 ## Quick Start
 
 ```bash
-# Prerequisites: 3 clusters (cluster1=hub, cluster2=leaf-1, cluster3=leaf-2)
+# Prerequisites: 3 clusters (hub-1, leaf-1, leaf-2)
 # Supported platforms: Colima (local k3s), EKS, GKE
 export SOLO_TRIAL_LICENSE_KEY=$SOLO_TRIAL_LICENSE_KEY
 export OPENAI_API_KEY=$OPENAI_API_KEY
@@ -27,7 +27,7 @@ export OPENAI_API_KEY=$OPENAI_API_KEY
 ## Architecture
 
 ```
-cluster1 (hub)          cluster2 (leaf-1)       cluster3 (leaf-2)
+hub-1                   leaf-1                  leaf-2
 ┌──────────────┐        ┌──────────────┐        ┌──────────────┐
 │   ArgoCD     │───────>│  Istio       │        │  Istio       │
 │   AppSets    │───────>│  AGW CP+DP   │        │  AGW CP+DP   │

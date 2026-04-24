@@ -21,9 +21,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-HUB_CTX="${HUB_CTX:-cluster1}"
-LEAF1_CTX="${LEAF1_CTX:-cluster2}"
-LEAF2_CTX="${LEAF2_CTX:-cluster3}"
+HUB_CTX="${HUB_CTX:-hub-1}"
+LEAF1_CTX="${LEAF1_CTX:-leaf-1}"
+LEAF2_CTX="${LEAF2_CTX:-leaf-2}"
 
 ARGOCD_VERSION="${ARGOCD_VERSION:-7.8.13}"
 
@@ -107,17 +107,23 @@ validate() {
 install_argocd() {
   echo "=== Installing ArgoCD on $HUB_CTX ==="
 
-  kubectl create namespace argocd --context "$HUB_CTX" 2>/dev/null || true
+  # Skip helm upgrade if ArgoCD is already running (avoids field-manager
+  # conflicts caused by post-install kubectl patches on re-runs)
+  if kubectl get deploy argocd-server -n argocd --context "$HUB_CTX" &>/dev/null; then
+    echo "ArgoCD already installed -- skipping helm upgrade."
+  else
+    kubectl create namespace argocd --context "$HUB_CTX" 2>/dev/null || true
 
-  helm repo add argo https://argoproj.github.io/argo-helm 2>/dev/null || true
-  helm repo update argo
+    helm repo add argo https://argoproj.github.io/argo-helm 2>/dev/null || true
+    helm repo update argo
 
-  helm upgrade --install argocd argo/argo-cd \
-    --namespace argocd \
-    --version "$ARGOCD_VERSION" \
-    --kube-context "$HUB_CTX" \
-    --values "$REPO_ROOT/argocd/bootstrap/values.yaml" \
-    --wait --timeout 300s
+    helm upgrade --install argocd argo/argo-cd \
+      --namespace argocd \
+      --version "$ARGOCD_VERSION" \
+      --kube-context "$HUB_CTX" \
+      --values "$REPO_ROOT/argocd/bootstrap/values.yaml" \
+      --wait --timeout 300s
+  fi
 
   echo "Waiting for ArgoCD server..."
   kubectl wait --for=condition=available deploy/argocd-server \
@@ -190,6 +196,19 @@ argocd_logout() {
 }
 
 # =============================================================================
+# Resolve Colima profile name from kubectl context
+# Context names may differ from Colima profile names (e.g. context "leaf-1"
+# maps to kubeconfig cluster "colima-cluster2" → Colima profile "cluster2")
+# =============================================================================
+get_colima_profile() {
+  local ctx=$1
+  local cluster_name
+  cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$ctx\")].context.cluster}" 2>/dev/null)
+  # Colima clusters are named "colima-<profile>" (or just "colima" for default)
+  echo "${cluster_name#colima-}"
+}
+
+# =============================================================================
 # Get the API server URL reachable from ArgoCD pods
 # =============================================================================
 get_leaf_server_url() {
@@ -207,11 +226,13 @@ get_leaf_server_url() {
 
   # Colima: find VM IP + k3s API port
   local vm_ip api_port
+  local colima_profile
+  colima_profile=$(get_colima_profile "$leaf_ctx")
 
   # Get VM IP
-  vm_ip=$(colima ssh --profile "$leaf_ctx" -- hostname -I 2>/dev/null | awk '{print $1}')
+  vm_ip=$(colima ssh --profile "$colima_profile" -- hostname -I 2>/dev/null | awk '{print $1}')
   if [ -z "$vm_ip" ]; then
-    echo "ERROR: Cannot determine VM IP for $leaf_ctx" >&2
+    echo "ERROR: Cannot determine VM IP for $leaf_ctx (colima profile: $colima_profile)" >&2
     return 1
   fi
 
@@ -463,7 +484,7 @@ inject_peering_addresses() {
   # The ApplicationSet has ignoreApplicationDifferences for helm/parameters,
   # so these patches won't be reverted by the controller.
 
-  # leaf-1 app: peers to cluster3, needs leaf-2's EW address
+  # leaf-1 app: peers to leaf-2, needs leaf-2's EW address
   kubectl patch application istio-peering-remote-leaf-1 -n argocd --context "$HUB_CTX" \
     --type=json -p="[
       {
@@ -476,7 +497,7 @@ inject_peering_addresses() {
       }
     ]"
 
-  # leaf-2 app: peers to cluster2, needs leaf-1's EW address
+  # leaf-2 app: peers to leaf-1, needs leaf-1's EW address
   kubectl patch application istio-peering-remote-leaf-2 -n argocd --context "$HUB_CTX" \
     --type=json -p="[
       {

@@ -1,6 +1,6 @@
 global:
   multiCluster:
-    clusterName: cluster3
-  network: cluster3
+    clusterName: leaf-2
+  network: leaf-2
 meshConfig:
-  trustDomain: cluster3.local
+  trustDomain: leaf-2.local

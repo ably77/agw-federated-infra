@@ -1,6 +1,6 @@
 global:
   multiCluster:
-    clusterName: cluster2
-network: cluster2
+    clusterName: leaf-1
+network: leaf-1
 env:
-  CLUSTER_ID: cluster2
+  CLUSTER_ID: leaf-1

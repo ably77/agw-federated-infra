@@ -6,9 +6,9 @@ set -uo pipefail
 #
 # Usage: ./scripts/validate.sh
 
-HUB_CTX="${HUB_CTX:-cluster1}"
-LEAF1_CTX="${LEAF1_CTX:-cluster2}"
-LEAF2_CTX="${LEAF2_CTX:-cluster3}"
+HUB_CTX="${HUB_CTX:-hub-1}"
+LEAF1_CTX="${LEAF1_CTX:-leaf-1}"
+LEAF2_CTX="${LEAF2_CTX:-leaf-2}"
 
 PASS=0
 FAIL=0
