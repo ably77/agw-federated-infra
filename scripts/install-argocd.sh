@@ -135,14 +135,60 @@ get_argocd_password() {
 }
 
 # =============================================================================
-# Discover API server address reachable from hub cluster pods
+# Login to ArgoCD CLI
+#   - Colima: use NodePort (port-forward is unreliable with k3s socat/gRPC)
+#   - EKS/GKE: use port-forward (works fine with real clusters)
 # =============================================================================
-get_api_server_for_argocd() {
+ARGOCD_PF_PID=""
+
+argocd_login() {
+  local password
+  password=$(get_argocd_password)
+
+  if [ "$PLATFORM" = "colima" ]; then
+    # Patch to NodePort and get the assigned port
+    kubectl patch svc argocd-server -n argocd --context "$HUB_CTX" \
+      -p '{"spec":{"type":"NodePort"}}' --type=merge 2>/dev/null || true
+    sleep 2
+
+    local nodeport
+    nodeport=$(kubectl get svc argocd-server -n argocd --context "$HUB_CTX" \
+      -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}')
+
+    argocd login "127.0.0.1:${nodeport}" \
+      --username admin \
+      --password "$password" \
+      --plaintext
+  else
+    # EKS/GKE: port-forward works reliably
+    kubectl port-forward svc/argocd-server -n argocd 8443:80 \
+      --context "$HUB_CTX" &>/dev/null &
+    ARGOCD_PF_PID=$!
+    sleep 5
+
+    argocd login localhost:8443 \
+      --username admin \
+      --password "$password" \
+      --plaintext
+  fi
+}
+
+argocd_logout() {
+  if [ -n "$ARGOCD_PF_PID" ]; then
+    kill "$ARGOCD_PF_PID" 2>/dev/null || true
+    ARGOCD_PF_PID=""
+  fi
+}
+
+# =============================================================================
+# Get the API server URL reachable from ArgoCD pods
+# =============================================================================
+get_leaf_server_url() {
   local leaf_ctx=$1
   local leaf_platform
   leaf_platform=$(detect_platform "$leaf_ctx")
 
-  # --- EKS / GKE / unknown: kubeconfig server URL is already externally routable ---
+  # EKS/GKE: kubeconfig server URL is already externally routable
   if [ "$leaf_platform" != "colima" ]; then
     local cluster_name
     cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$leaf_ctx\")].context.cluster}" 2>/dev/null)
@@ -150,92 +196,151 @@ get_api_server_for_argocd() {
     return
   fi
 
-  # --- Colima: localhost-forwarded ports need special handling ---
+  # Colima: find VM IP + k3s listening port
+  local vm_ip api_port
 
-  # Strategy 1: Use Colima VM IP + port 6443
-  local vm_name="${leaf_ctx}"
-  local vm_ip
-  vm_ip=$(colima ssh --profile "$vm_name" -- hostname -I 2>/dev/null | awk '{print $1}')
-  if [ -n "$vm_ip" ]; then
-    if kubectl exec -n argocd deploy/argocd-server --context "$HUB_CTX" -- \
-       wget -q --spider --timeout=3 "https://${vm_ip}:6443" 2>/dev/null; then
-      echo "https://${vm_ip}:6443"
-      return
-    fi
+  # Get VM IP
+  vm_ip=$(colima ssh --profile "$leaf_ctx" -- hostname -I 2>/dev/null | awk '{print $1}')
+  if [ -z "$vm_ip" ]; then
+    echo "ERROR: Cannot determine VM IP for $leaf_ctx" >&2
+    return 1
   fi
 
-  # Strategy 2: Use host gateway IP + forwarded port
-  local api_server
-  api_server=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"colima-${leaf_ctx}\")].cluster.server}" 2>/dev/null)
-  if [ -z "$api_server" ]; then
-    api_server=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"${leaf_ctx}\")].cluster.server}" 2>/dev/null)
-  fi
-  local port
-  port=$(echo "$api_server" | sed 's|.*:\([0-9]*\)$|\1|')
-
-  local host_ip
-  host_ip=$(kubectl exec -n argocd deploy/argocd-server --context "$HUB_CTX" -- \
-    sh -c "getent hosts host.docker.internal 2>/dev/null | awk '{print \$1}'" 2>/dev/null || true)
-
-  if [ -z "$host_ip" ]; then
-    host_ip=$(kubectl exec -n argocd deploy/argocd-server --context "$HUB_CTX" -- \
-      sh -c "ip route | grep default | awk '{print \$3}'" 2>/dev/null || true)
+  # Get k3s API port (listening on all interfaces inside the VM)
+  api_port=$(colima ssh --profile "$leaf_ctx" -- ss -tlnp 2>/dev/null \
+    | grep '\*:' | awk '{print $4}' | grep -oE '[0-9]+' | head -1)
+  if [ -z "$api_port" ]; then
+    # Fallback: extract port from kubeconfig
+    local cluster_name
+    cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$leaf_ctx\")].context.cluster}" 2>/dev/null)
+    local server_url
+    server_url=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$cluster_name\")].cluster.server}" 2>/dev/null)
+    api_port=$(echo "$server_url" | sed 's|.*:\([0-9]*\)$|\1|')
   fi
 
-  if [ -n "$host_ip" ] && [ -n "$port" ]; then
-    echo "https://${host_ip}:${port}"
-    return
-  fi
-
-  # Strategy 3: Fallback
-  echo "$api_server"
+  echo "https://${vm_ip}:${api_port}"
 }
 
 # =============================================================================
 # Register leaf clusters with ArgoCD
+#   - Colima: create cluster secrets directly (argocd cluster add fails
+#     because it stores localhost URLs unreachable from ArgoCD pods)
+#   - EKS/GKE: use argocd cluster add (server URLs are externally routable)
 # =============================================================================
 register_clusters() {
   echo "=== Registering leaf clusters with ArgoCD ==="
 
-  # Get ArgoCD password and login
-  local password
-  password=$(get_argocd_password)
+  if [ "$PLATFORM" = "colima" ]; then
+    register_clusters_colima
+  else
+    register_clusters_cloud
+  fi
 
-  # Port-forward ArgoCD for CLI access (port 80 since server runs --insecure)
-  kubectl port-forward svc/argocd-server -n argocd 8443:80 \
-    --context "$HUB_CTX" &>/dev/null &
-  local pf_pid=$!
-  sleep 5
+  echo "Leaf clusters registered."
+}
 
-  argocd login localhost:8443 \
-    --username admin \
-    --password "$password" \
-    --plaintext
-
-  # Register each leaf cluster
-  local leaf_name leaf_ctx
+register_clusters_colima() {
   for pair in "leaf-1:$LEAF1_CTX" "leaf-2:$LEAF2_CTX"; do
-    leaf_name="${pair%%:*}"
-    leaf_ctx="${pair##*:}"
+    local leaf_name="${pair%%:*}"
+    local leaf_ctx="${pair##*:}"
+    local leaf_num="${leaf_name##leaf-}"
+    local cluster_repo="https://github.com/ably77/agw-federated-cluster-${leaf_num}.git"
+
+    echo "Registering $leaf_name ($leaf_ctx) via kubectl secret..."
+
+    # Create ServiceAccount + RBAC on the leaf cluster
+    kubectl create sa argocd-manager -n kube-system --context "$leaf_ctx" 2>/dev/null || true
+    kubectl apply --context "$leaf_ctx" -f - <<'RBACEOF'
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argocd-manager-role
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+  - nonResourceURLs: ["*"]
+    verbs: ["*"]
+RBACEOF
+    kubectl create clusterrolebinding argocd-manager-role-binding \
+      --clusterrole=argocd-manager-role \
+      --serviceaccount=kube-system:argocd-manager \
+      --context "$leaf_ctx" 2>/dev/null || true
+
+    # Create a long-lived token secret
+    kubectl apply --context "$leaf_ctx" -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argocd-manager-token
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: argocd-manager
+type: kubernetes.io/service-account-token
+EOF
+    sleep 3
+
+    # Get token
+    local token
+    token=$(kubectl get secret argocd-manager-token -n kube-system \
+      --context "$leaf_ctx" -o jsonpath='{.data.token}' | base64 -d)
+
+    # Get server URL reachable from hub cluster pods
+    local server_url
+    server_url=$(get_leaf_server_url "$leaf_ctx")
+    echo "  Server URL: $server_url"
+
+    # Create ArgoCD cluster secret on the hub
+    kubectl apply --context "$HUB_CTX" -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${leaf_name}-cluster-secret
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: cluster
+    agw-role: leaf
+    agw-leaf-name: ${leaf_name}
+  annotations:
+    agw-cluster-repo: ${cluster_repo}
+type: Opaque
+stringData:
+  name: ${leaf_name}
+  server: ${server_url}
+  config: |
+    {
+      "bearerToken": "${token}",
+      "tlsClientConfig": {
+        "insecure": true
+      }
+    }
+EOF
+
+    echo "  $leaf_name registered."
+  done
+}
+
+register_clusters_cloud() {
+  argocd_login
+
+  for pair in "leaf-1:$LEAF1_CTX" "leaf-2:$LEAF2_CTX"; do
+    local leaf_name="${pair%%:*}"
+    local leaf_ctx="${pair##*:}"
     local cluster_repo="https://github.com/ably77/agw-federated-cluster-${leaf_name##leaf-}.git"
 
-    echo "Registering $leaf_name ($leaf_ctx)..."
+    echo "Registering $leaf_name ($leaf_ctx) via argocd CLI..."
 
-    # Use argocd cluster add which handles ServiceAccount creation
     argocd cluster add "$leaf_ctx" \
       --name "$leaf_name" \
       --label "agw-role=leaf" \
       --label "agw-leaf-name=${leaf_name}" \
-      --label "agw-cluster-repo=${cluster_repo}" \
+      --annotation "agw-cluster-repo=${cluster_repo}" \
       --yes
 
-    echo "$leaf_name registered."
+    echo "  $leaf_name registered."
   done
 
-  # Clean up port-forward
-  kill $pf_pid 2>/dev/null || true
-
-  echo "Leaf clusters registered."
+  argocd_logout
 }
 
 # =============================================================================
@@ -245,24 +350,57 @@ apply_argocd_resources() {
   echo "=== Applying ArgoCD AppProjects and ApplicationSets ==="
 
   kubectl apply -f "$REPO_ROOT/argocd/projects/" --context "$HUB_CTX"
+
+  # Patch developers project to allow empty-namespace apps (multi-namespace kustomize)
+  kubectl patch appproject developers -n argocd --context "$HUB_CTX" \
+    --type=json -p='[{"op":"add","path":"/spec/destinations/-","value":{"namespace":"","server":"*"}}]' 2>/dev/null || true
+
   kubectl apply -f "$REPO_ROOT/argocd/applicationsets/" --context "$HUB_CTX"
 
   echo "ArgoCD resources applied."
 }
 
 # =============================================================================
+# Inject license key into enterprise-agw ApplicationSet
+# (Keeps the license out of git -- applied directly on the cluster)
+# =============================================================================
+inject_license_key() {
+  echo "=== Injecting license key into enterprise-agw ApplicationSet ==="
+
+  kubectl patch applicationset enterprise-agw -n argocd --context "$HUB_CTX" \
+    --type=json -p="[
+      {
+        \"op\": \"add\",
+        \"path\": \"/spec/template/spec/sources/0/helm/parameters\",
+        \"value\": [{\"name\": \"licensing.licenseKey\", \"value\": \"$SOLO_TRIAL_LICENSE_KEY\"}]
+      }
+    ]"
+
+  echo "License key injected."
+}
+
+# =============================================================================
 # Create LLM secrets on leaf clusters
 # =============================================================================
 create_secrets() {
-  echo "=== Creating LLM API key secrets on leaf clusters ==="
+  echo "=== Creating secrets on leaf clusters ==="
 
   for ctx in $LEAF1_CTX $LEAF2_CTX; do
     kubectl create namespace agentgateway-system --context "$ctx" 2>/dev/null || true
+
+    # OpenAI API key
     kubectl create secret generic enrollment-openai-secret \
       -n agentgateway-system \
       --from-literal="Authorization=Bearer $OPENAI_API_KEY" \
       --dry-run=client -oyaml | kubectl apply --context "$ctx" -f -
-    echo "Secret created on $ctx."
+
+    # Solo license key (for enterprise-agentgateway)
+    kubectl create secret generic solo-license \
+      -n agentgateway-system \
+      --from-literal="license-key=$SOLO_TRIAL_LICENSE_KEY" \
+      --dry-run=client -oyaml | kubectl apply --context "$ctx" -f -
+
+    echo "  Secrets created on $ctx."
   done
 }
 
@@ -346,24 +484,25 @@ CNFEOF
 }
 
 # =============================================================================
-# Wait for ArgoCD sync
+# Wait for ArgoCD sync -- count Healthy (not Synced+Healthy) because
+# k8s 1.35 structured merge diff causes cosmetic OutOfSync on some apps
 # =============================================================================
 wait_for_sync() {
   echo "=== Waiting for ArgoCD to sync all applications ==="
 
-  local timeout=600
+  local timeout=900
   local interval=15
   local elapsed=0
 
   while [ $elapsed -lt $timeout ]; do
     local total healthy
     total=$(kubectl get applications -n argocd --context "$HUB_CTX" --no-headers 2>/dev/null | wc -l | tr -d ' ')
-    healthy=$(kubectl get applications -n argocd --context "$HUB_CTX" --no-headers 2>/dev/null | grep -c "Healthy.*Synced" || true)
+    healthy=$(kubectl get applications -n argocd --context "$HUB_CTX" --no-headers 2>/dev/null | grep -c "Healthy" || true)
 
-    echo "  Applications: $healthy/$total healthy+synced (${elapsed}s elapsed)"
+    echo "  Applications: $healthy/$total healthy (${elapsed}s elapsed)"
 
     if [ "$total" -gt 0 ] && [ "$healthy" -eq "$total" ]; then
-      echo "All applications synced and healthy!"
+      echo "All applications healthy!"
       return 0
     fi
 
@@ -371,7 +510,7 @@ wait_for_sync() {
     elapsed=$((elapsed + interval))
   done
 
-  echo "WARNING: Not all applications synced within ${timeout}s."
+  echo "WARNING: Not all applications healthy within ${timeout}s."
   echo "Check: kubectl get applications -n argocd --context $HUB_CTX"
   return 1
 }
@@ -403,11 +542,23 @@ print_access_info() {
   echo ""
   echo "Platform: $PLATFORM"
   echo ""
-  echo "ArgoCD UI:"
-  echo "  kubectl port-forward svc/argocd-server -n argocd 8080:80 --context $HUB_CTX"
-  echo "  URL: https://localhost:8080"
-  echo "  Username: admin"
-  echo "  Password: $password"
+
+  if [ "$PLATFORM" = "colima" ]; then
+    local nodeport
+    nodeport=$(kubectl get svc argocd-server -n argocd --context "$HUB_CTX" \
+      -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}' 2>/dev/null)
+    echo "ArgoCD UI:"
+    echo "  URL: http://localhost:${nodeport}"
+    echo "  Username: admin"
+    echo "  Password: $password"
+  else
+    echo "ArgoCD UI:"
+    echo "  kubectl port-forward svc/argocd-server -n argocd 8080:80 --context $HUB_CTX"
+    echo "  URL: http://localhost:8080"
+    echo "  Username: admin"
+    echo "  Password: $password"
+  fi
+
   echo ""
 
   if [ "$PLATFORM" = "eks" ] || [ "$PLATFORM" = "gke" ]; then
@@ -452,5 +603,6 @@ create_istio_certs
 create_secrets
 register_clusters
 apply_argocd_resources
+inject_license_key
 wait_for_sync || true
 print_access_info
