@@ -40,13 +40,18 @@ spec:
           - CreateNamespace=true
 ---
 # Remote peering -- links clusters for cross-cluster service discovery
-# Addresses are injected by the install script after east-west gateways are up
+# Addresses are injected by the install script via kubectl patch on each
+# generated Application (not the ApplicationSet). ignoreApplicationDifferences
+# prevents the controller from reverting the patched helm parameters.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
   name: istio-peering-remote
   namespace: argocd
 spec:
+  ignoreApplicationDifferences:
+    - jsonPointers:
+        - /spec/sources/0/helm/parameters
   generators:
     - clusters:
         selector:

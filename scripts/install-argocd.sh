@@ -466,33 +466,44 @@ inject_peering_addresses() {
 
   # Determine address type (EKS uses hostnames, GKE/Colima use IPs)
   local addr_type="IPAddress"
-  if [[ "$leaf1_ew_addr" == *"."*"."*"."* ]] || [[ "$leaf1_ew_addr" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  if [[ "$leaf1_ew_addr" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     addr_type="IPAddress"
   else
     addr_type="Hostname"
   fi
   echo "  Address type: $addr_type"
 
-  # Update the peering-remote values files with actual addresses
-  # Replaces any existing address value (PLACEHOLDER or previous address)
-  # leaf-1 needs leaf-2's address (to reach cluster3)
-  sed -i.bak -e "s|address: \".*\"|address: \"${leaf2_ew_addr}\"|" \
-             -e "s|addressType: .*|addressType: ${addr_type}|" \
-    "$REPO_ROOT/helm-apps/istio/overlays/leaf-1-peering-remote-values.yaml"
-  # leaf-2 needs leaf-1's address (to reach cluster2)
-  sed -i.bak -e "s|address: \".*\"|address: \"${leaf1_ew_addr}\"|" \
-             -e "s|addressType: .*|addressType: ${addr_type}|" \
-    "$REPO_ROOT/helm-apps/istio/overlays/leaf-2-peering-remote-values.yaml"
-  rm -f "$REPO_ROOT/helm-apps/istio/overlays/"*.bak
+  # Patch each generated Application with the correct remote peer address.
+  # The ApplicationSet has ignoreApplicationDifferences for helm/parameters,
+  # so these patches won't be reverted by the controller.
 
-  # Commit and push the address updates so ArgoCD picks them up
-  cd "$REPO_ROOT"
-  git add helm-apps/istio/overlays/leaf-*-peering-remote-values.yaml
-  git commit -m "Inject east-west gateway addresses for multicluster peering" 2>/dev/null || true
-  git push 2>/dev/null || true
-  cd -
+  # leaf-1 app: peers to cluster3, needs leaf-2's EW address
+  kubectl patch application istio-peering-remote-leaf-1 -n argocd --context "$HUB_CTX" \
+    --type=json -p="[
+      {
+        \"op\": \"add\",
+        \"path\": \"/spec/sources/0/helm/parameters\",
+        \"value\": [
+          {\"name\": \"remote.items[0].address\", \"value\": \"$leaf2_ew_addr\"},
+          {\"name\": \"remote.items[0].addressType\", \"value\": \"$addr_type\"}
+        ]
+      }
+    ]"
 
-  echo "Peering addresses injected and pushed to git."
+  # leaf-2 app: peers to cluster2, needs leaf-1's EW address
+  kubectl patch application istio-peering-remote-leaf-2 -n argocd --context "$HUB_CTX" \
+    --type=json -p="[
+      {
+        \"op\": \"add\",
+        \"path\": \"/spec/sources/0/helm/parameters\",
+        \"value\": [
+          {\"name\": \"remote.items[0].address\", \"value\": \"$leaf1_ew_addr\"},
+          {\"name\": \"remote.items[0].addressType\", \"value\": \"$addr_type\"}
+        ]
+      }
+    ]"
+
+  echo "Peering addresses patched on Applications."
 }
 
 # =============================================================================
