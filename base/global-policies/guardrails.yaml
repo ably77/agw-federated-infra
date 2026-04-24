@@ -48,3 +48,4 @@ spec:
             - PhoneNumber
           response:
             message: "Response filtered: PII redacted from model output."
+            statusCode: 403
