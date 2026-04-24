@@ -442,25 +442,19 @@ inject_peering_addresses() {
     done
   done
 
-  # Get east-west gateway addresses
+  # Get east-west gateway addresses from the LoadBalancer service
+  # Works for both Colima (k3s ServiceLB assigns VM IP) and cloud (real LB)
   local leaf1_ew_addr leaf2_ew_addr
 
-  if [ "$PLATFORM" = "colima" ]; then
-    # Colima: use node IP (VM IP) since no LoadBalancer is available
-    leaf1_ew_addr=$(colima ssh --profile "$LEAF1_CTX" -- hostname -I 2>/dev/null | awk '{print $1}')
-    leaf2_ew_addr=$(colima ssh --profile "$LEAF2_CTX" -- hostname -I 2>/dev/null | awk '{print $1}')
-  else
-    # Cloud: get LoadBalancer address from the east-west gateway service
-    for i in $(seq 1 30); do
-      leaf1_ew_addr=$(get_lb_address istio-eastwest istio-eastwest "$LEAF1_CTX")
-      leaf2_ew_addr=$(get_lb_address istio-eastwest istio-eastwest "$LEAF2_CTX")
-      if [ "$leaf1_ew_addr" != "<pending>" ] && [ "$leaf2_ew_addr" != "<pending>" ]; then
-        break
-      fi
-      echo "  Waiting for east-west LB addresses... (${i}/30)"
-      sleep 4
-    done
-  fi
+  for i in $(seq 1 30); do
+    leaf1_ew_addr=$(get_lb_address istio-eastwest istio-eastwest "$LEAF1_CTX")
+    leaf2_ew_addr=$(get_lb_address istio-eastwest istio-eastwest "$LEAF2_CTX")
+    if [ "$leaf1_ew_addr" != "<pending>" ] && [ "$leaf2_ew_addr" != "<pending>" ]; then
+      break
+    fi
+    echo "  Waiting for east-west LB addresses... (${i}/30)"
+    sleep 4
+  done
 
   echo "  Leaf-1 east-west address: $leaf1_ew_addr"
   echo "  Leaf-2 east-west address: $leaf2_ew_addr"
@@ -470,12 +464,24 @@ inject_peering_addresses() {
     return 1
   fi
 
+  # Determine address type (EKS uses hostnames, GKE/Colima use IPs)
+  local addr_type="IPAddress"
+  if [[ "$leaf1_ew_addr" == *"."*"."*"."* ]] || [[ "$leaf1_ew_addr" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    addr_type="IPAddress"
+  else
+    addr_type="Hostname"
+  fi
+  echo "  Address type: $addr_type"
+
   # Update the peering-remote values files with actual addresses
+  # Replaces any existing address value (PLACEHOLDER or previous address)
   # leaf-1 needs leaf-2's address (to reach cluster3)
-  sed -i.bak "s|address: \"PLACEHOLDER\"|address: \"${leaf2_ew_addr}\"|" \
+  sed -i.bak -e "s|address: \".*\"|address: \"${leaf2_ew_addr}\"|" \
+             -e "s|addressType: .*|addressType: ${addr_type}|" \
     "$REPO_ROOT/helm-apps/istio/overlays/leaf-1-peering-remote-values.yaml"
   # leaf-2 needs leaf-1's address (to reach cluster2)
-  sed -i.bak "s|address: \"PLACEHOLDER\"|address: \"${leaf1_ew_addr}\"|" \
+  sed -i.bak -e "s|address: \".*\"|address: \"${leaf1_ew_addr}\"|" \
+             -e "s|addressType: .*|addressType: ${addr_type}|" \
     "$REPO_ROOT/helm-apps/istio/overlays/leaf-2-peering-remote-values.yaml"
   rm -f "$REPO_ROOT/helm-apps/istio/overlays/"*.bak
 

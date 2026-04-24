@@ -7,6 +7,6 @@ remote:
       cluster: cluster2
       network: cluster2
       addressType: IPAddress
-      address: "192.168.5.3"
+      address: "PLACEHOLDER"
       preferredDataplaneServiceType: loadbalancer
       trustDomain: cluster2.local
