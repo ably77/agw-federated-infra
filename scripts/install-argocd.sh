@@ -405,20 +405,6 @@ inject_license_key() {
 }
 
 # =============================================================================
-# Label istio-system namespace with network topology for multicluster peering
-# =============================================================================
-label_istio_networks() {
-  echo "=== Labeling istio-system namespaces with network topology ==="
-
-  kubectl label namespace istio-system --context "$LEAF1_CTX" \
-    topology.istio.io/network=cluster2 --overwrite
-  kubectl label namespace istio-system --context "$LEAF2_CTX" \
-    topology.istio.io/network=cluster3 --overwrite
-
-  echo "Network labels applied."
-}
-
-# =============================================================================
 # Inject east-west gateway addresses into remote peering ApplicationSets
 # Waits for the east-west gateways to be deployed by ArgoCD, then patches
 # the peering-remote values with the actual addresses.
@@ -750,7 +736,6 @@ create_secrets
 register_clusters
 apply_argocd_resources
 inject_license_key
-label_istio_networks
 wait_for_sync || true
 inject_peering_addresses
 label_global_services
