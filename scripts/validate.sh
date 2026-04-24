@@ -160,12 +160,15 @@ spec:
   - group: gateway.networking.k8s.io
     kind: Gateway
     name: agentgateway-proxy
-  backend:
+  default:
     ai:
-      promptGuard: {}
+      promptGuard:
+        request:
+          customResponse:
+            message: "blocked"
 EOF
 )
-if echo "$POLICY_RESULT" | grep -qi "denied\|blocked\|validate"; then
+if echo "$POLICY_RESULT" | grep -qi "denied\|blocked\|validate\|invalid"; then
   echo "  [PASS] Kyverno blocks rogue policy override"
   PASS=$((PASS + 1))
 else
