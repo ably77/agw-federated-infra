@@ -7,6 +7,6 @@ remote:
       cluster: cluster3
       network: cluster3
       addressType: IPAddress
-      address: "PLACEHOLDER"
+      address: "192.168.5.4"
       preferredDataplaneServiceType: nodeport
       trustDomain: cluster.local
