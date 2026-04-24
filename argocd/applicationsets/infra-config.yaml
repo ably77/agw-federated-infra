@@ -18,6 +18,15 @@ spec:
         argocd.argoproj.io/sync-wave: "10"
     spec:
       project: platform
+      ignoreDifferences:
+        - group: enterpriseagentgateway.solo.io
+          kind: EnterpriseAgentgatewayPolicy
+          jsonPointers:
+            - /metadata
+        - group: kyverno.io
+          kind: ClusterPolicy
+          jsonPointers:
+            - /metadata
       source:
         repoURL: https://github.com/ably77/agw-federated-infra.git
         targetRevision: main
