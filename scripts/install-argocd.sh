@@ -2,12 +2,16 @@
 set -euo pipefail
 
 # AGW Federated GitOps -- ArgoCD Bootstrap Script
-# Installs ArgoCD on the hub cluster (cluster1) and registers leaf clusters.
+# Installs ArgoCD on the hub cluster and registers leaf clusters.
+#
+# Supported platforms: Colima (local k3s), EKS, GKE
+# Platform is auto-detected from kubeconfig API server URLs.
 #
 # Prerequisites:
-#   - 3 Colima clusters running: cluster1 (hub), cluster2 (leaf-1), cluster3 (leaf-2)
+#   - 3 clusters: 1 hub + 2 leaf (contexts configurable via env vars)
 #   - SOLO_TRIAL_LICENSE_KEY and OPENAI_API_KEY environment variables set
 #   - helm, kubectl, argocd CLI installed
+#   - For Colima: colima CLI installed
 #
 # Usage:
 #   export SOLO_TRIAL_LICENSE_KEY=<key>
@@ -24,6 +28,23 @@ LEAF2_CTX="${LEAF2_CTX:-cluster3}"
 ARGOCD_VERSION="${ARGOCD_VERSION:-7.8.13}"
 
 # =============================================================================
+# Platform Detection
+# =============================================================================
+detect_platform() {
+  local ctx=$1
+  local server
+  server=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$ctx\")].context.cluster}")\")].cluster.server}" 2>/dev/null)
+  case "$server" in
+    *.eks.amazonaws.com*) echo "eks" ;;
+    *.gke.goog*|*.googleapis.com*) echo "gke" ;;
+    *127.0.0.1*|*localhost*) echo "colima" ;;
+    *) echo "unknown" ;;
+  esac
+}
+
+PLATFORM=""  # Set during validation
+
+# =============================================================================
 # Validation
 # =============================================================================
 validate() {
@@ -37,8 +58,8 @@ validate() {
     fi
   done
 
-  # Check CLIs
-  for cmd in helm kubectl argocd colima; do
+  # Check base CLIs
+  for cmd in helm kubectl argocd; do
     if ! command -v "$cmd" &>/dev/null; then
       echo "ERROR: $cmd not found. Please install it."
       exit 1
@@ -48,11 +69,34 @@ validate() {
   # Check clusters reachable
   for ctx in $HUB_CTX $LEAF1_CTX $LEAF2_CTX; do
     if ! kubectl cluster-info --context "$ctx" &>/dev/null; then
-      echo "ERROR: Cannot reach cluster '$ctx'. Is Colima running?"
-      echo "  colima start --profile ${ctx#cluster}"
+      echo "ERROR: Cannot reach cluster '$ctx'."
       exit 1
     fi
   done
+
+  # Detect platform from hub cluster
+  PLATFORM=$(detect_platform "$HUB_CTX")
+  echo "Detected platform: $PLATFORM"
+
+  # Platform-specific CLI checks
+  case "$PLATFORM" in
+    colima)
+      if ! command -v colima &>/dev/null; then
+        echo "ERROR: colima not found. Please install it."
+        exit 1
+      fi
+      ;;
+    eks)
+      if ! command -v aws &>/dev/null; then
+        echo "WARNING: aws CLI not found. EKS-specific features may not work."
+      fi
+      ;;
+    gke)
+      if ! command -v gcloud &>/dev/null; then
+        echo "WARNING: gcloud CLI not found. GKE-specific features may not work."
+      fi
+      ;;
+  esac
 
   echo "All prerequisites met."
 }
@@ -95,13 +139,24 @@ get_argocd_password() {
 # =============================================================================
 get_api_server_for_argocd() {
   local leaf_ctx=$1
+  local leaf_platform
+  leaf_platform=$(detect_platform "$leaf_ctx")
+
+  # --- EKS / GKE / unknown: kubeconfig server URL is already externally routable ---
+  if [ "$leaf_platform" != "colima" ]; then
+    local cluster_name
+    cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$leaf_ctx\")].context.cluster}" 2>/dev/null)
+    kubectl config view -o jsonpath="{.clusters[?(@.name==\"$cluster_name\")].cluster.server}" 2>/dev/null
+    return
+  fi
+
+  # --- Colima: localhost-forwarded ports need special handling ---
 
   # Strategy 1: Use Colima VM IP + port 6443
   local vm_name="${leaf_ctx}"
   local vm_ip
   vm_ip=$(colima ssh --profile "$vm_name" -- hostname -I 2>/dev/null | awk '{print $1}')
   if [ -n "$vm_ip" ]; then
-    # Verify k3s API is reachable on VM IP from hub
     if kubectl exec -n argocd deploy/argocd-server --context "$HUB_CTX" -- \
        wget -q --spider --timeout=3 "https://${vm_ip}:6443" 2>/dev/null; then
       echo "https://${vm_ip}:6443"
@@ -110,23 +165,19 @@ get_api_server_for_argocd() {
   fi
 
   # Strategy 2: Use host gateway IP + forwarded port
-  # Get the forwarded port from kubeconfig
   local api_server
   api_server=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"colima-${leaf_ctx}\")].cluster.server}" 2>/dev/null)
   if [ -z "$api_server" ]; then
-    # Try without colima- prefix
     api_server=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"${leaf_ctx}\")].cluster.server}" 2>/dev/null)
   fi
   local port
   port=$(echo "$api_server" | sed 's|.*:\([0-9]*\)$|\1|')
 
-  # Get host IP as seen from inside the hub cluster
   local host_ip
   host_ip=$(kubectl exec -n argocd deploy/argocd-server --context "$HUB_CTX" -- \
     sh -c "getent hosts host.docker.internal 2>/dev/null | awk '{print \$1}'" 2>/dev/null || true)
 
   if [ -z "$host_ip" ]; then
-    # Fallback: try the default gateway
     host_ip=$(kubectl exec -n argocd deploy/argocd-server --context "$HUB_CTX" -- \
       sh -c "ip route | grep default | awk '{print \$3}'" 2>/dev/null || true)
   fi
@@ -136,8 +187,7 @@ get_api_server_for_argocd() {
     return
   fi
 
-  # Strategy 3: Fallback -- use the kubeconfig server directly
-  # This won't work from inside a pod but is useful for debugging
+  # Strategy 3: Fallback
   echo "$api_server"
 }
 
@@ -328,6 +378,19 @@ wait_for_sync() {
 }
 
 # =============================================================================
+# Resolve LoadBalancer address (IP on GKE, hostname on EKS NLB)
+# =============================================================================
+get_lb_address() {
+  local svc=$1 ns=$2 ctx=$3
+  local ip hostname
+  ip=$(kubectl get svc "$svc" -n "$ns" --context "$ctx" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+  if [ -n "$ip" ]; then echo "$ip"; return; fi
+  hostname=$(kubectl get svc "$svc" -n "$ns" --context "$ctx" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+  if [ -n "$hostname" ]; then echo "$hostname"; return; fi
+  echo "<pending>"
+}
+
+# =============================================================================
 # Print access info
 # =============================================================================
 print_access_info() {
@@ -339,11 +402,30 @@ print_access_info() {
   echo "  AGW Federated GitOps -- Install Complete"
   echo "============================================"
   echo ""
+  echo "Platform: $PLATFORM"
+  echo ""
   echo "ArgoCD UI:"
   echo "  kubectl port-forward svc/argocd-server -n argocd 8080:443 --context $HUB_CTX"
   echo "  URL: https://localhost:8080"
   echo "  Username: admin"
   echo "  Password: $password"
+  echo ""
+
+  if [ "$PLATFORM" = "eks" ] || [ "$PLATFORM" = "gke" ]; then
+    echo "Ingress Gateway (leaf-1):"
+    local lb_addr
+    lb_addr=$(get_lb_address ingress agentgateway-system "$LEAF1_CTX")
+    echo "  LoadBalancer: $lb_addr"
+    if [[ "$lb_addr" == *".elb."* || "$lb_addr" == *".amazonaws.com"* ]]; then
+      echo "  EKS NLB detected -- resolve hostname to IP for /etc/hosts:"
+      echo "    nslookup $lb_addr"
+    fi
+    echo "  Add to /etc/hosts:"
+    echo "    <LB_IP> enroll.glootest.com grafana.glootest.com"
+    echo ""
+  fi
+
+  echo "Port-forward access (works on all platforms):"
   echo ""
   echo "Enrollment Chatbot (leaf-1):"
   echo "  kubectl port-forward svc/enrollment-chatbot -n wgu-demo-frontend 8501:8501 --context $LEAF1_CTX"

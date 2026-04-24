@@ -2,7 +2,10 @@
 set -euo pipefail
 
 # Re-register leaf clusters with ArgoCD
-# Use after Colima restart when VM IPs change.
+# Use after Colima restart when VM IPs change, or when switching
+# between platforms (Colima, EKS, GKE).
+#
+# Supported platforms: Colima, EKS, GKE (auto-detected from kubeconfig)
 #
 # Usage: ./scripts/register-clusters.sh
 
