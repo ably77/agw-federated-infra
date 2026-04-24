@@ -130,7 +130,14 @@ install_argocd() {
     echo "ArgoCD service patched to NodePort."
   fi
 
-  echo "ArgoCD installed on $HUB_CTX."
+  # Set admin password to solo.io
+  kubectl --context "$HUB_CTX" -n argocd patch secret argocd-secret \
+    -p '{"stringData": {
+      "admin.password": "$2a$10$79yaoOg9dL5MO8pn8hGqtO4xQDejSEVNWAGQR268JHLdrCw6UCYmy",
+      "admin.passwordMtime": "'$(date +%FT%T%Z)'"
+    }}' > /dev/null 2>&1
+
+  echo "ArgoCD installed on $HUB_CTX. (admin / solo.io)"
 }
 
 # =============================================================================

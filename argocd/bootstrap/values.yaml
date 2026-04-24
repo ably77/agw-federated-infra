@@ -5,7 +5,8 @@ server:
     - --insecure
 configs:
   secret:
-    argocdServerAdminPassword: "$2a$10$B45/9oBaSsIvGPjCRO.JR.iY8U6o.D.ZCIHYoPwZ5NlERIuamVFDW"
+    # Password: solo.io
+    argocdServerAdminPassword: "$2a$10$79yaoOg9dL5MO8pn8hGqtO4xQDejSEVNWAGQR268JHLdrCw6UCYmy"
   params:
     applicationsetcontroller.policy: sync
     applicationsetcontroller.enable.new.git.file.globbing: "true"
