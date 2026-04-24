@@ -4,6 +4,7 @@ metadata:
   name: wgu-demo
   labels:
     istio.io/dataplane-mode: ambient
+    istio.io/use-waypoint: wgu-demo-waypoint
 ---
 apiVersion: v1
 kind: Namespace
