@@ -395,6 +395,91 @@ inject_license_key() {
 }
 
 # =============================================================================
+# Label istio-system namespace with network topology for multicluster peering
+# =============================================================================
+label_istio_networks() {
+  echo "=== Labeling istio-system namespaces with network topology ==="
+
+  kubectl label namespace istio-system --context "$LEAF1_CTX" \
+    topology.istio.io/network=cluster2 --overwrite
+  kubectl label namespace istio-system --context "$LEAF2_CTX" \
+    topology.istio.io/network=cluster3 --overwrite
+
+  echo "Network labels applied."
+}
+
+# =============================================================================
+# Inject east-west gateway addresses into remote peering ApplicationSets
+# Waits for the east-west gateways to be deployed by ArgoCD, then patches
+# the peering-remote values with the actual addresses.
+# =============================================================================
+inject_peering_addresses() {
+  echo "=== Injecting east-west gateway addresses for multicluster peering ==="
+
+  # Wait for east-west gateway pods on both leaf clusters
+  echo "Waiting for east-west gateways..."
+  for ctx in $LEAF1_CTX $LEAF2_CTX; do
+    for i in $(seq 1 60); do
+      if kubectl get pods -n istio-eastwest --context "$ctx" 2>/dev/null | grep -q Running; then
+        echo "  East-west gateway running on $ctx"
+        break
+      fi
+      if [ $i -eq 60 ]; then
+        echo "WARNING: East-west gateway not ready on $ctx after 120s -- skipping peering"
+        return 1
+      fi
+      sleep 2
+    done
+  done
+
+  # Get east-west gateway addresses
+  local leaf1_ew_addr leaf2_ew_addr
+
+  if [ "$PLATFORM" = "colima" ]; then
+    # Colima: use node IP (VM IP) since no LoadBalancer is available
+    leaf1_ew_addr=$(colima ssh --profile "$LEAF1_CTX" -- hostname -I 2>/dev/null | awk '{print $1}')
+    leaf2_ew_addr=$(colima ssh --profile "$LEAF2_CTX" -- hostname -I 2>/dev/null | awk '{print $1}')
+  else
+    # Cloud: get LoadBalancer address from the east-west gateway service
+    for i in $(seq 1 30); do
+      leaf1_ew_addr=$(get_lb_address istio-eastwest istio-eastwest "$LEAF1_CTX")
+      leaf2_ew_addr=$(get_lb_address istio-eastwest istio-eastwest "$LEAF2_CTX")
+      if [ "$leaf1_ew_addr" != "<pending>" ] && [ "$leaf2_ew_addr" != "<pending>" ]; then
+        break
+      fi
+      echo "  Waiting for east-west LB addresses... (${i}/30)"
+      sleep 4
+    done
+  fi
+
+  echo "  Leaf-1 east-west address: $leaf1_ew_addr"
+  echo "  Leaf-2 east-west address: $leaf2_ew_addr"
+
+  if [ -z "$leaf1_ew_addr" ] || [ -z "$leaf2_ew_addr" ]; then
+    echo "ERROR: Could not determine east-west gateway addresses."
+    return 1
+  fi
+
+  # Update the peering-remote values files with actual addresses
+  # leaf-1 needs leaf-2's address (to reach cluster3)
+  sed -i.bak "s|address: \"PLACEHOLDER\"|address: \"${leaf2_ew_addr}\"|" \
+    "$REPO_ROOT/helm-apps/istio/overlays/leaf-1-peering-remote-values.yaml"
+  # leaf-2 needs leaf-1's address (to reach cluster2)
+  sed -i.bak "s|address: \"PLACEHOLDER\"|address: \"${leaf1_ew_addr}\"|" \
+    "$REPO_ROOT/helm-apps/istio/overlays/leaf-2-peering-remote-values.yaml"
+  rm -f "$REPO_ROOT/helm-apps/istio/overlays/"*.bak
+
+  # Commit and push the address updates so ArgoCD picks them up
+  cd "$REPO_ROOT"
+  git add helm-apps/istio/overlays/leaf-*-peering-remote-values.yaml
+  git commit -m "Inject east-west gateway addresses for multicluster peering" 2>/dev/null || true
+  git push 2>/dev/null || true
+  cd -
+
+  echo "Peering addresses injected and pushed to git."
+}
+
+# =============================================================================
 # Create LLM secrets on leaf clusters
 # =============================================================================
 create_secrets() {
@@ -623,5 +708,7 @@ create_secrets
 register_clusters
 apply_argocd_resources
 inject_license_key
+label_istio_networks
 wait_for_sync || true
+inject_peering_addresses
 print_access_info

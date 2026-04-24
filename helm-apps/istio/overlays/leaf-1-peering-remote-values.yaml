@@ -1,0 +1,12 @@
+# Remote peer: leaf-1 reaches leaf-2 (cluster3)
+# address is injected by install script after east-west gateways are up
+remote:
+  create: true
+  items:
+    - name: istio-remote-peer-cluster3
+      cluster: cluster3
+      network: cluster3
+      addressType: IPAddress
+      address: "PLACEHOLDER"
+      preferredDataplaneServiceType: nodeport
+      trustDomain: cluster.local

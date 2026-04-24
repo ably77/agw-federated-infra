@@ -1,0 +1,80 @@
+---
+# East-west gateway -- enables cross-cluster traffic via ztunnel peering
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: istio-eastwest
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            agw-role: leaf
+  template:
+    metadata:
+      name: 'istio-eastwest-{{name}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "5"
+    spec:
+      project: platform
+      sources:
+        - repoURL: us-docker.pkg.dev/soloio-img/istio-helm
+          chart: peering
+          targetRevision: 1.29.0-solo
+          helm:
+            valueFiles:
+              - $values/helm-apps/istio/peering-eastwest-values.yaml
+              - $values/helm-apps/istio/overlays/{{name}}-peering-eastwest-values.yaml
+        - repoURL: https://github.com/ably77/agw-federated-infra.git
+          targetRevision: main
+          ref: values
+      destination:
+        server: '{{server}}'
+        namespace: istio-eastwest
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+---
+# Remote peering -- links clusters for cross-cluster service discovery
+# Addresses are injected by the install script after east-west gateways are up
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: istio-peering-remote
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            agw-role: leaf
+  template:
+    metadata:
+      name: 'istio-peering-remote-{{name}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "6"
+    spec:
+      project: platform
+      sources:
+        - repoURL: us-docker.pkg.dev/soloio-img/istio-helm
+          chart: peering
+          targetRevision: 1.29.0-solo
+          helm:
+            valueFiles:
+              - $values/helm-apps/istio/overlays/{{name}}-peering-remote-values.yaml
+        - repoURL: https://github.com/ably77/agw-federated-infra.git
+          targetRevision: main
+          ref: values
+      destination:
+        server: '{{server}}'
+        namespace: istio-eastwest
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
