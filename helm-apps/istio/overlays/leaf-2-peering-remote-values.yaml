@@ -9,4 +9,4 @@ remote:
       addressType: IPAddress
       address: "192.168.5.3"
       preferredDataplaneServiceType: loadbalancer
-      trustDomain: cluster.local
+      trustDomain: cluster2.local
