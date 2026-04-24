@@ -4,6 +4,8 @@ server:
   extraArgs:
     - --insecure
 configs:
+  secret:
+    argocdServerAdminPassword: "$2a$10$B45/9oBaSsIvGPjCRO.JR.iY8U6o.D.ZCIHYoPwZ5NlERIuamVFDW"
   params:
     applicationsetcontroller.policy: sync
     applicationsetcontroller.enable.new.git.file.globbing: "true"
