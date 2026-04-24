@@ -1,0 +1,35 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: deny-agentgateway-policy-override
+  annotations:
+    policies.kyverno.io/description: >-
+      Prevents developers from creating or modifying EnterpriseAgentgatewayPolicy
+      resources in the platform namespace (agentgateway-system).
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: deny-local-policy-in-platform-ns
+      match:
+        any:
+          - resources:
+              kinds:
+                - EnterpriseAgentgatewayPolicy
+              namespaces:
+                - agentgateway-system
+      exclude:
+        any:
+          - subjects:
+              - kind: ServiceAccount
+                name: argocd-application-controller
+                namespace: argocd
+          - subjects:
+              - kind: ServiceAccount
+                name: argocd-server
+                namespace: argocd
+      validate:
+        message: >-
+          Policy resources in the agentgateway-system namespace can only be
+          managed via the infra git repo.
+        deny: {}

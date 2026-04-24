@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  agentgateway-overview.json: |
+    {
+      "annotations": { "list": [] },
+      "title": "Agentgateway Overview",
+      "uid": "agw-overview",
+      "version": 1,
+      "panels": [],
+      "schemaVersion": 39,
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" }
+    }

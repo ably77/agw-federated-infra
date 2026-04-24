@@ -1,0 +1,31 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-guardrail-reference
+  annotations:
+    policies.kyverno.io/description: >-
+      All AI HTTPRoutes that reference AgentgatewayBackend resources must have
+      a corresponding guardrail policy. This is advisory -- the policy logs
+      a warning but does not block.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: httproute-backend-ref-audit
+      match:
+        any:
+          - resources:
+              kinds:
+                - HTTPRoute
+      preconditions:
+        all:
+          - key: "{{ request.object.spec.rules[].backendRefs[].group || '' }}"
+            operator: AnyIn
+            value:
+              - agentgateway.dev
+      validate:
+        message: >-
+          This HTTPRoute references an AgentgatewayBackend. Ensure a matching
+          EnterpriseAgentgatewayPolicy with guardrail configuration targets
+          this route.
+        deny: {}

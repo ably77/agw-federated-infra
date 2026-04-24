@@ -1,0 +1,33 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: deny-local-agentgateway-backends
+  annotations:
+    policies.kyverno.io/description: >-
+      Only the platform team (via GitOps) can create backend resources.
+      Ensures a single source of truth for the AI model registry.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: deny-manual-backend-creation
+      match:
+        any:
+          - resources:
+              kinds:
+                - AgentgatewayBackend
+      exclude:
+        any:
+          - subjects:
+              - kind: ServiceAccount
+                name: argocd-application-controller
+                namespace: argocd
+          - subjects:
+              - kind: ServiceAccount
+                name: argocd-server
+                namespace: argocd
+      validate:
+        message: >-
+          Backend resources can only be managed via the infra git repo.
+          Contact the platform team to add a new AI backend.
+        deny: {}
