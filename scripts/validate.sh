@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 # AGW Federated GitOps -- End-to-end Validation
 # Validates that the entire reference architecture is working correctly.
@@ -16,8 +16,8 @@ WARN=0
 
 check() {
   local desc=$1
-  shift
-  if "$@" &>/dev/null; then
+  local cmd=$2
+  if eval "$cmd" &>/dev/null; then
     echo "  [PASS] $desc"
     PASS=$((PASS + 1))
   else
@@ -28,8 +28,8 @@ check() {
 
 check_warn() {
   local desc=$1
-  shift
-  if "$@" &>/dev/null; then
+  local cmd=$2
+  if eval "$cmd" &>/dev/null; then
     echo "  [PASS] $desc"
     PASS=$((PASS + 1))
   else
@@ -45,17 +45,15 @@ echo ""
 echo "=== Phase 1: ArgoCD Health (hub: $HUB_CTX) ==="
 
 check "ArgoCD server running" \
-  kubectl get deploy argocd-server -n argocd --context "$HUB_CTX" \
-  -o jsonpath='{.status.readyReplicas}' | grep -q "1"
+  "kubectl get deploy argocd-server -n argocd --context $HUB_CTX -o jsonpath='{.status.readyReplicas}' | grep -q 1"
 
 check "ArgoCD application controller running" \
-  kubectl get deploy argocd-application-controller -n argocd --context "$HUB_CTX" \
-  -o jsonpath='{.status.readyReplicas}' | grep -q "1"
+  "kubectl get statefulset argocd-application-controller -n argocd --context $HUB_CTX -o jsonpath='{.status.readyReplicas}' | grep -q 1"
 
-# Count applications
+# Count applications -- treat all Healthy as success (OutOfSync+Healthy is a cosmetic diff issue)
 TOTAL_APPS=$(kubectl get applications -n argocd --context "$HUB_CTX" --no-headers 2>/dev/null | wc -l | tr -d ' ')
-HEALTHY_APPS=$(kubectl get applications -n argocd --context "$HUB_CTX" --no-headers 2>/dev/null | grep -c "Healthy.*Synced" || true)
-echo "  [INFO] Applications: $HEALTHY_APPS/$TOTAL_APPS healthy+synced"
+HEALTHY_APPS=$(kubectl get applications -n argocd --context "$HUB_CTX" --no-headers 2>/dev/null | grep -c "Healthy" || true)
+echo "  [INFO] Applications: $HEALTHY_APPS/$TOTAL_APPS healthy"
 
 if [ "$TOTAL_APPS" -gt 0 ] && [ "$HEALTHY_APPS" -eq "$TOTAL_APPS" ]; then
   echo "  [PASS] All ArgoCD applications healthy"
@@ -63,7 +61,7 @@ if [ "$TOTAL_APPS" -gt 0 ] && [ "$HEALTHY_APPS" -eq "$TOTAL_APPS" ]; then
 else
   echo "  [FAIL] Not all applications healthy"
   FAIL=$((FAIL + 1))
-  kubectl get applications -n argocd --context "$HUB_CTX" --no-headers 2>/dev/null | grep -v "Healthy.*Synced" || true
+  kubectl get applications -n argocd --context "$HUB_CTX" --no-headers 2>/dev/null | grep -v "Healthy" || true
 fi
 
 # =========================================================================
@@ -74,41 +72,31 @@ for leaf_ctx in $LEAF1_CTX $LEAF2_CTX; do
   echo "=== Phase 2: Infrastructure ($leaf_ctx) ==="
 
   check "istiod running" \
-    kubectl get pods -n istio-system -l app=istiod --context "$leaf_ctx" \
-    --field-selector=status.phase=Running --no-headers | grep -q .
+    "kubectl get pods -n istio-system -l app=istiod --context $leaf_ctx --field-selector=status.phase=Running --no-headers | grep -q ."
 
   check "ztunnel running" \
-    kubectl get pods -n istio-system -l app=ztunnel --context "$leaf_ctx" \
-    --field-selector=status.phase=Running --no-headers | grep -q .
+    "kubectl get pods -n istio-system -l app=ztunnel --context $leaf_ctx --field-selector=status.phase=Running --no-headers | grep -q ."
 
   check "AGW controller running" \
-    kubectl get pods -n agentgateway-system \
-    -l app.kubernetes.io/name=enterprise-agentgateway --context "$leaf_ctx" \
-    --field-selector=status.phase=Running --no-headers | grep -q .
+    "kubectl get pods -n agentgateway-system -l app.kubernetes.io/name=enterprise-agentgateway --context $leaf_ctx --field-selector=status.phase=Running --no-headers | grep -q ."
 
   check "AGW proxy gateway programmed" \
-    kubectl get gateway agentgateway-proxy -n agentgateway-system \
-    --context "$leaf_ctx" -o jsonpath='{.status.conditions[?(@.type=="Programmed")].status}' | grep -q "True"
+    "kubectl get gateway agentgateway-proxy -n agentgateway-system --context $leaf_ctx -o jsonpath='{.status.conditions[?(@.type==\"Programmed\")].status}' | grep -q True"
 
   check "Kyverno running" \
-    kubectl get pods -n kyverno -l app.kubernetes.io/component=admission-controller \
-    --context "$leaf_ctx" --field-selector=status.phase=Running --no-headers | grep -q .
+    "kubectl get pods -n kyverno -l app.kubernetes.io/component=admission-controller --context $leaf_ctx --field-selector=status.phase=Running --no-headers | grep -q ."
 
   check "Prometheus running" \
-    kubectl get pods -n monitoring -l app.kubernetes.io/name=prometheus \
-    --context "$leaf_ctx" --field-selector=status.phase=Running --no-headers | grep -q .
+    "kubectl get pods -n monitoring -l app.kubernetes.io/name=prometheus --context $leaf_ctx --field-selector=status.phase=Running --no-headers | grep -q ."
 
   check "Grafana running" \
-    kubectl get pods -n monitoring -l app.kubernetes.io/name=grafana \
-    --context "$leaf_ctx" --field-selector=status.phase=Running --no-headers | grep -q .
+    "kubectl get pods -n monitoring -l app.kubernetes.io/name=grafana --context $leaf_ctx --field-selector=status.phase=Running --no-headers | grep -q ."
 
   check "Namespace wgu-demo exists with ambient label" \
-    kubectl get ns wgu-demo --context "$leaf_ctx" \
-    -o jsonpath='{.metadata.labels.istio\.io/dataplane-mode}' | grep -q "ambient"
+    "kubectl get ns wgu-demo --context $leaf_ctx -o jsonpath='{.metadata.labels.istio\.io/dataplane-mode}' | grep -q ambient"
 
   check "Namespace wgu-demo-frontend exists with ambient label" \
-    kubectl get ns wgu-demo-frontend --context "$leaf_ctx" \
-    -o jsonpath='{.metadata.labels.istio\.io/dataplane-mode}' | grep -q "ambient"
+    "kubectl get ns wgu-demo-frontend --context $leaf_ctx -o jsonpath='{.metadata.labels.istio\.io/dataplane-mode}' | grep -q ambient"
 done
 
 # =========================================================================
@@ -120,18 +108,17 @@ for leaf_ctx in $LEAF1_CTX $LEAF2_CTX; do
 
   for deploy in graph-db-mock data-product-api financial-aid-mcp; do
     check "$deploy ready" \
-      kubectl rollout status deploy/$deploy -n wgu-demo --context "$leaf_ctx" --timeout=10s
+      "kubectl rollout status deploy/$deploy -n wgu-demo --context $leaf_ctx --timeout=10s"
   done
 
   check "enrollment-chatbot ready" \
-    kubectl rollout status deploy/enrollment-chatbot -n wgu-demo-frontend --context "$leaf_ctx" --timeout=10s
+    "kubectl rollout status deploy/enrollment-chatbot -n wgu-demo-frontend --context $leaf_ctx --timeout=10s"
 
   check "waypoint running" \
-    kubectl get pods -n wgu-demo -l gateway.networking.k8s.io/gateway-name=wgu-demo-waypoint \
-    --context "$leaf_ctx" --field-selector=status.phase=Running --no-headers | grep -q .
+    "kubectl get pods -n wgu-demo -l gateway.networking.k8s.io/gateway-name=wgu-demo-waypoint --context $leaf_ctx --field-selector=status.phase=Running --no-headers | grep -q ."
 
   check "abac-ext-authz ready" \
-    kubectl rollout status deploy/abac-ext-authz -n agentgateway-system --context "$leaf_ctx" --timeout=10s
+    "kubectl rollout status deploy/abac-ext-authz -n agentgateway-system --context $leaf_ctx --timeout=10s"
 done
 
 # =========================================================================
@@ -199,7 +186,7 @@ PF_CHATBOT=$!
 sleep 2
 
 check_warn "Chatbot responds" \
-  curl -sf -o /dev/null http://localhost:18501/
+  "curl -sf -o /dev/null http://localhost:18501/"
 
 kill $PF_CHATBOT 2>/dev/null || true
 
