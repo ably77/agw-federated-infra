@@ -28,6 +28,10 @@ spec:
               - kind: ServiceAccount
                 name: argocd-server
                 namespace: argocd
+          - subjects:
+              - kind: ServiceAccount
+                name: argocd-manager
+                namespace: kube-system
       validate:
         message: >-
           Policy resources in the agentgateway-system namespace can only be

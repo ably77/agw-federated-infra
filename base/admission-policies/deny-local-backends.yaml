@@ -26,6 +26,10 @@ spec:
               - kind: ServiceAccount
                 name: argocd-server
                 namespace: argocd
+          - subjects:
+              - kind: ServiceAccount
+                name: argocd-manager
+                namespace: kube-system
       validate:
         message: >-
           Backend resources can only be managed via the infra git repo.
