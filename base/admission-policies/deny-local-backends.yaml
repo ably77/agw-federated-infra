@@ -30,7 +30,9 @@ spec:
               - kind: ServiceAccount
                 name: argocd-manager
                 namespace: kube-system
+      skipBackgroundRequests: true
       validate:
+        allowExistingViolations: true
         message: >-
           Backend resources can only be managed via the infra git repo.
           Contact the platform team to add a new AI backend.

@@ -23,7 +23,9 @@ spec:
             operator: AnyIn
             value:
               - agentgateway.dev
+      skipBackgroundRequests: true
       validate:
+        allowExistingViolations: true
         message: >-
           This HTTPRoute references an AgentgatewayBackend. Ensure a matching
           EnterpriseAgentgatewayPolicy with guardrail configuration targets
