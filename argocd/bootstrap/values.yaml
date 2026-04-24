@@ -1,0 +1,60 @@
+server:
+  service:
+    type: ClusterIP
+  extraArgs:
+    - --insecure
+configs:
+  params:
+    applicationsetcontroller.policy: sync
+    applicationsetcontroller.enable.new.git.file.globbing: "true"
+  cm:
+    helm.enabled: "true"
+    timeout.reconciliation: 180s
+    resource.exclusions: |
+      - apiGroups:
+          - cilium.io
+        kinds:
+          - CiliumIdentity
+        clusters:
+          - "*"
+  repositories:
+    solo-istio-helm:
+      type: helm
+      name: solo-istio-helm
+      url: us-docker.pkg.dev/soloio-img/istio-helm
+      enableOCI: "true"
+    enterprise-agentgateway:
+      type: helm
+      name: enterprise-agentgateway
+      url: us-docker.pkg.dev/solo-public/enterprise-agentgateway/charts
+      enableOCI: "true"
+    kyverno:
+      type: helm
+      name: kyverno
+      url: https://kyverno.github.io/kyverno/
+    prometheus-community:
+      type: helm
+      name: prometheus-community
+      url: https://prometheus-community.github.io/helm-charts
+    agw-federated-infra:
+      type: git
+      name: agw-federated-infra
+      url: https://github.com/ably77/agw-federated-infra.git
+    agw-federated-cluster-1:
+      type: git
+      name: agw-federated-cluster-1
+      url: https://github.com/ably77/agw-federated-cluster-1.git
+    agw-federated-cluster-2:
+      type: git
+      name: agw-federated-cluster-2
+      url: https://github.com/ably77/agw-federated-cluster-2.git
+applicationSet:
+  enabled: true
+controller:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: developers
+  namespace: argocd
+spec:
+  description: Developer teams -- workloads and routes
+  sourceRepos:
+    - https://github.com/ably77/agw-federated-cluster-1.git
+    - https://github.com/ably77/agw-federated-cluster-2.git
+  destinations:
+    - namespace: wgu-demo
+      server: '*'
+    - namespace: wgu-demo-frontend
+      server: '*'
+    - namespace: agentgateway-system
+      server: '*'
+    - namespace: monitoring
+      server: '*'
+  clusterResourceWhitelist:
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
