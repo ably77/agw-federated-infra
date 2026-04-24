@@ -391,6 +391,16 @@ inject_license_key() {
       }
     ]"
 
+  # Istiod (required for multicluster peering license validation)
+  kubectl patch applicationset istiod -n argocd --context "$HUB_CTX" \
+    --type=json -p="[
+      {
+        \"op\": \"add\",
+        \"path\": \"/spec/template/spec/sources/0/helm/parameters\",
+        \"value\": [{\"name\": \"license.value\", \"value\": \"$SOLO_TRIAL_LICENSE_KEY\"}]
+      }
+    ]"
+
   echo "License keys injected."
 }
 
