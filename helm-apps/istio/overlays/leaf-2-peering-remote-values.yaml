@@ -8,5 +8,5 @@ remote:
       network: cluster2
       addressType: IPAddress
       address: "192.168.5.3"
-      preferredDataplaneServiceType: nodeport
+      preferredDataplaneServiceType: loadbalancer
       trustDomain: cluster.local
