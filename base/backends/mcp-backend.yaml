@@ -1,0 +1,13 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: financial-aid-mcp-backend
+  namespace: agentgateway-system
+spec:
+  mcp:
+    targets:
+    - name: financial-aid-mcp-target
+      static:
+        host: financial-aid-mcp.wgu-demo.svc.cluster.local
+        port: 8082
+        protocol: StreamableHTTP
