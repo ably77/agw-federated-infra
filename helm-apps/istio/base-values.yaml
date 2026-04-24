@@ -1,4 +1,4 @@
 global:
   hub: us-docker.pkg.dev/soloio-img/istio
-  tag: 1.29.0-solo
+  tag: 1.29.2-patch0-solo
   variant: distroless

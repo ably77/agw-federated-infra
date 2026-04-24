@@ -55,7 +55,7 @@ spec:
       sources:
         - repoURL: us-docker.pkg.dev/soloio-img/istio-helm
           chart: base
-          targetRevision: 1.29.0-solo
+          targetRevision: 1.29.2-patch0-solo
           helm:
             valueFiles:
               - $values/helm-apps/istio/base-values.yaml
@@ -94,7 +94,7 @@ spec:
       sources:
         - repoURL: us-docker.pkg.dev/soloio-img/istio-helm
           chart: cni
-          targetRevision: 1.29.0-solo
+          targetRevision: 1.29.2-patch0-solo
           helm:
             valueFiles:
               - $values/helm-apps/istio/cni-values.yaml
@@ -132,7 +132,7 @@ spec:
       sources:
         - repoURL: us-docker.pkg.dev/soloio-img/istio-helm
           chart: istiod
-          targetRevision: 1.29.0-solo
+          targetRevision: 1.29.2-patch0-solo
           helm:
             valueFiles:
               - $values/helm-apps/istio/istiod-values.yaml
@@ -171,7 +171,7 @@ spec:
       sources:
         - repoURL: us-docker.pkg.dev/soloio-img/istio-helm
           chart: ztunnel
-          targetRevision: 1.29.0-solo
+          targetRevision: 1.29.2-patch0-solo
           helm:
             valueFiles:
               - $values/helm-apps/istio/ztunnel-values.yaml

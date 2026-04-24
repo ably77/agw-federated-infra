@@ -21,7 +21,7 @@ spec:
       sources:
         - repoURL: us-docker.pkg.dev/soloio-img/istio-helm
           chart: peering
-          targetRevision: 1.29.0-solo
+          targetRevision: 1.29.2-patch0-solo
           helm:
             valueFiles:
               - $values/helm-apps/istio/peering-eastwest-values.yaml
@@ -62,7 +62,7 @@ spec:
       sources:
         - repoURL: us-docker.pkg.dev/soloio-img/istio-helm
           chart: peering
-          targetRevision: 1.29.0-solo
+          targetRevision: 1.29.2-patch0-solo
           helm:
             valueFiles:
               - $values/helm-apps/istio/overlays/{{name}}-peering-remote-values.yaml

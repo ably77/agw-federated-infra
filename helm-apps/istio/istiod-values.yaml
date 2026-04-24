@@ -1,7 +1,7 @@
 profile: ambient
 global:
   hub: us-docker.pkg.dev/soloio-img/istio
-  tag: 1.29.0-solo
+  tag: 1.29.2-patch0-solo
   variant: distroless
 env:
   PILOT_ENABLE_IP_AUTOALLOCATE: "true"
