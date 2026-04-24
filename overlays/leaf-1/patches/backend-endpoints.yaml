@@ -1,0 +1,10 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openai
+  namespace: agentgateway-system
+spec:
+  policies:
+    auth:
+      secretRef:
+        name: enrollment-openai-secret
