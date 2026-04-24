@@ -160,12 +160,11 @@ spec:
   - group: gateway.networking.k8s.io
     kind: Gateway
     name: agentgateway-proxy
-  default:
+  backend:
     ai:
       promptGuard:
-        request:
-          customResponse:
-            message: "blocked"
+        request: {}
+        response: {}
 EOF
 )
 if echo "$POLICY_RESULT" | grep -qi "denied\|blocked\|validate\|invalid"; then
