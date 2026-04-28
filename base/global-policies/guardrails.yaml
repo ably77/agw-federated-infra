@@ -8,6 +8,9 @@ spec:
   - group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: wgu-enrollment
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: subscriber
   backend:
     ai:
       promptGuard:
