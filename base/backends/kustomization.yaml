@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - openai.yaml
   - mcp-backend.yaml
+  - analytics-mcp.yaml
