@@ -6,9 +6,9 @@ A step-by-step guide for SAs to demo onboarding a second AI application onto the
 
 The platform is already running with a WGU enrollment chatbot (first tenant). You walk the prospect through onboarding the **Hooli Entertainment Concierge** (streaming-services) as a second tenant. The demo proves:
 
-1. **Platform team controls backends, policies, and namespaces** via the infra git repo
+1. **Platform team controls backends, namespaces, and policies** via the infra git repo
 2. **Developers self-service** within guardrails — they deploy services and wire up routes
-3. **Global policies automatically apply** — guardrails and rate limits protect the new app with zero developer effort
+3. **Global policies automatically apply** — the shared `/openai` route already has guardrails; new teams get them for free
 4. **Kyverno enforces boundaries** — developers cannot create backends or override policies
 
 ## Prerequisites
@@ -26,7 +26,7 @@ cd agw-federated-infra
 ./scripts/setup-onboarding-demo.sh
 ```
 
-This creates 5 open PRs and prints them in merge order. Keep the output handy — it has the PR URLs and kubectl commands.
+This creates 4 open PRs and prints them in merge order. Keep the output handy — it has the PR URLs and kubectl commands.
 
 Open three surfaces:
 - **GitHub** — the PR list for both repos
@@ -37,7 +37,7 @@ Open three surfaces:
 
 ## Demo Flow
 
-### Act 1: Platform Team Onboarding (PRs 1-3)
+### Act 1: Platform Team Onboarding (PRs 1-2)
 
 > **Narrative:** "Before a developer touches anything, the platform team prepares the environment. This is a one-time onboarding step."
 
@@ -45,11 +45,14 @@ Open three surfaces:
 
 Merge the first PR in the **infra repo**.
 
-**What to show:** The diff — two namespace entries added to the AppProject, and streaming namespaces added to `base/namespaces.yaml`.
+**What to show:** The diff — streaming namespaces added to `base/namespaces.yaml` with ambient mesh labels.
 
-**Talk track:** "The platform team grants the streaming team access to specific namespaces. This is the only thing the developer needs to request. Everything else is self-service."
+**Talk track:** "The platform team provisions the streaming team's namespaces. This is the only thing the developer needs to request. Everything else is self-service."
 
-**ArgoCD:** After sync, the `agw-infra-config-leaf-1` app shows the new namespaces created on the cluster.
+**ArgoCD:** After sync, the `agw-infra-config-leaf-1` app shows the new namespaces created on the cluster. Verify:
+```bash
+kubectl get ns streaming-backend streaming-frontend --context leaf-1
+```
 
 #### PR 2: Add analytics MCP backend
 
@@ -57,7 +60,7 @@ Merge the second PR in the **infra repo**.
 
 **What to show:** The diff — a new `AgentgatewayBackend` resource for the MCP analytics server.
 
-**Talk track:** "Backends are the AI model registry — only the platform team can create them. The streaming team requested an MCP backend for their analytics service. The platform team reviews it, approves it, and provisions it centrally."
+**Talk track:** "Backends are the AI model registry — only the platform team can create them. The streaming team requested an MCP backend for their analytics service. The platform team reviews it, approves it, and provisions it centrally. The shared `/openai` route already has guardrails and rate limits — new teams get them for free."
 
 **ArgoCD:** After sync, run:
 ```bash
@@ -65,27 +68,13 @@ kubectl get agentgatewaybackends -n agentgateway-system --context leaf-1
 ```
 Show the new `analytics-mcp-backend` alongside the existing `openai` and `financial-aid-mcp-backend`.
 
-#### PR 3: Extend guardrails and rate limits
-
-Merge the third PR in the **infra repo**.
-
-**What to show:** The diff — the existing guardrails policy gets a second `targetRef` for the streaming route, and a new rate limit config is created.
-
-**Talk track:** "The platform team extends the same guardrails — PII detection, prompt injection protection, credential scanning, and token rate limits — to cover the new team's route. The developer never has to think about compliance. This is the handshake: the platform team says 'you're covered.'"
-
-**ArgoCD:** After sync, run:
-```bash
-kubectl get enterpriseagentgatewaypolicies -n agentgateway-system --context leaf-1
-```
-Show `subscriber-rate-limit` (ATTACHED=False because the route doesn't exist yet — it will attach automatically once the developer creates it).
-
 ---
 
-### Act 2: Developer Self-Service (PRs 4-5)
+### Act 2: Developer Self-Service (PRs 3-4)
 
 > **Narrative:** "Now the developer takes over. They deploy their app and wire up routing — all through their own git repo, no tickets, no waiting."
 
-#### PR 4: Deploy application services
+#### PR 3: Deploy application services
 
 Merge the first PR in the **cluster-1 repo**.
 
@@ -98,22 +87,21 @@ Merge the first PR in the **cluster-1 repo**.
 kubectl get pods -n streaming-backend --context leaf-1
 kubectl get pods -n streaming-frontend --context leaf-1
 ```
-All 4 pods running. Point out: "The chatbot is up, but it can't reach the LLM yet — no routes exist."
+All 4 pods running. Point out: "The chatbot is up, but it can't reach the MCP analytics tools yet — no MCP route exists."
 
-#### PR 5: Add routes and ingress
+#### PR 4: Add MCP route and ingress
 
 Merge the second PR in the **cluster-1 repo**.
 
-**What to show:** The diff — HTTPRoutes referencing the platform-owned backends, ingress route, ReferenceGrants.
+**What to show:** The diff — MCP HTTPRoute referencing the platform-provisioned backend, ingress route for user access, ReferenceGrants for cross-namespace routing.
 
-**Talk track:** "Now the developer wires up routing. They reference the shared OpenAI backend and their MCP backend — both provisioned by the platform team. They don't create backends, they just point to them. At this point the app is fully functional and guardrails are already active."
+**Talk track:** "The developer wires up their MCP tools and ingress. They reference the platform-provisioned MCP backend — they don't create backends, they just point to them. The LLM route is already provided by the platform with guardrails active. At this point the app is fully functional."
 
 **ArgoCD:** After sync, run:
 ```bash
-kubectl get httproutes -n agentgateway-system --context leaf-1
-kubectl get enterpriseagentgatewaypolicies -n agentgateway-system --context leaf-1
+kubectl get httproutes.gateway.networking.k8s.io -A --context leaf-1
 ```
-Show that `subscriber-rate-limit` is now ATTACHED=True — the policy automatically attached when the route appeared.
+Show the new `analytics-mcp` route alongside the existing routes.
 
 **Live test:** Port-forward to the chatbot (or use ingress):
 ```bash
@@ -122,7 +110,7 @@ kubectl port-forward svc/streaming-backend-chatbot -n streaming-frontend 18502:8
 Open `http://localhost:18502`:
 1. Ask the chatbot a question — it works
 2. Try: *"My credit card is 4111-1111-1111-1111"* — **blocked by guardrails**
-3. Point out: "Zero guardrail configuration from the developer. The platform team's policies applied automatically."
+3. Point out: "Zero guardrail configuration from the developer. The platform team's policies on the shared LLM route applied automatically."
 
 ---
 
@@ -205,7 +193,7 @@ deny-agentgateway-policy-override:
 
 > **Key points to land:**
 > - Platform team controls the "what" (backends, policies, namespaces) — developers control the "how" (routes, services, deployments)
-> - Global policies apply automatically — no developer effort, no gaps
+> - Global policies apply automatically — the shared LLM route has guardrails that cover every team
 > - Kyverno enforces the boundary at admission time — not just convention, actual enforcement
 > - Everything is GitOps — auditable, reviewable, reversible
 
