@@ -32,12 +32,9 @@ CLUSTER1_BASELINE=$(git rev-parse onboarding-baseline)
 CLUSTER1_HEAD=$(git rev-parse HEAD)
 
 if [ "$CLUSTER1_HEAD" != "$CLUSTER1_BASELINE" ]; then
-  git revert --no-commit "${CLUSTER1_BASELINE}..HEAD"
-  git commit -m "Reset: remove streaming team resources
-
-Reverts all onboarding demo changes to restore baseline state."
-  git push origin main
-  echo "  Cluster-1 reverted to baseline"
+  git reset --hard "$CLUSTER1_BASELINE"
+  git push origin main --force
+  echo "  Cluster-1 reset to baseline ($CLUSTER1_BASELINE)"
 else
   echo "  Cluster-1 already at baseline"
 fi
@@ -59,13 +56,9 @@ INFRA_BASELINE=$(git rev-parse onboarding-baseline)
 INFRA_HEAD=$(git rev-parse HEAD)
 
 if [ "$INFRA_HEAD" != "$INFRA_BASELINE" ]; then
-  git revert --no-commit "${INFRA_BASELINE}..HEAD"
-  git commit -m "Reset: remove streaming team platform config
-
-Reverts onboarding demo changes: analytics-mcp backend, streaming policy
-targetRefs, streaming namespace grants."
-  git push origin main
-  echo "  Infra reverted to baseline"
+  git reset --hard "$INFRA_BASELINE"
+  git push origin main --force
+  echo "  Infra reset to baseline ($INFRA_BASELINE)"
 else
   echo "  Infra already at baseline"
 fi
