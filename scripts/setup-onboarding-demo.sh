@@ -140,42 +140,6 @@ BODY
 )")
 echo "  PR 5: $PR5"
 
-PR6=$(gh pr create --repo "$CLUSTER1_REPO" \
-  --base main \
-  --head onboarding/06-rogue-backend \
-  --title "Streaming team: Add Anthropic backend" \
-  --body "$(cat <<'BODY'
-## Failure Demo 1: Rogue Backend
-
-A developer attempts to bring their own Anthropic LLM backend.
-
-**Expected result:** ArgoCD sync FAILS. Kyverno blocks the AgentgatewayBackend creation with: "Backend resources can only be managed via the infra git repo. Contact the platform team to add a new AI backend."
-
-**Demo talking point:** Watch what happens when a developer tries to bring their own LLM backend. Kyverno blocks it at admission -- only ArgoCD's service account from the infra repo can create backends. Show the error in the ArgoCD UI.
-
-**After demo:** Revert this PR before proceeding to PR 7.
-BODY
-)")
-echo "  PR 6: $PR6"
-
-PR7=$(gh pr create --repo "$CLUSTER1_REPO" \
-  --base main \
-  --head onboarding/07-rogue-policy \
-  --title "Streaming team: Disable guardrails on our route" \
-  --body "$(cat <<'BODY'
-## Failure Demo 2: Rogue Policy Override
-
-A developer attempts to create an EnterpriseAgentgatewayPolicy in the agentgateway-system namespace to disable guardrails on their route.
-
-**Expected result:** ArgoCD sync FAILS. Kyverno blocks the policy creation with: "Policy resources in the agentgateway-system namespace can only be managed via the infra git repo."
-
-**Demo talking point:** Same story for policies. A developer can't bypass the guardrails the platform team set. They can create policies in their own namespaces for app-specific behavior, but they can't touch the platform namespace.
-
-**After demo:** Revert this PR, then run the reset script.
-BODY
-)")
-echo "  PR 7: $PR7"
-
 echo ""
 echo "=== Demo PRs created ==="
 echo ""
@@ -185,7 +149,42 @@ echo "  2. $PR2"
 echo "  3. $PR3"
 echo "  4. $PR4"
 echo "  5. $PR5"
-echo "  6. $PR6  (sync will FAIL -- Kyverno denial)"
-echo "  7. $PR7  (sync will FAIL -- Kyverno denial)"
+echo ""
+echo "After merging all PRs, demonstrate Kyverno enforcement with kubectl:"
+echo ""
+echo "  # Failure Demo 1: Rogue backend"
+echo "  kubectl apply --context leaf-1 -f - <<'EOF'"
+echo "  apiVersion: agentgateway.dev/v1alpha1"
+echo "  kind: AgentgatewayBackend"
+echo "  metadata:"
+echo "    name: rogue-backend"
+echo "    namespace: agentgateway-system"
+echo "  spec:"
+echo "    ai:"
+echo "      provider:"
+echo "        anthropic: {}"
+echo "  EOF"
+echo ""
+echo "  # Failure Demo 2: Rogue policy override"
+echo "  kubectl apply --context leaf-1 -f - <<'EOF'"
+echo "  apiVersion: enterpriseagentgateway.solo.io/v1alpha1"
+echo "  kind: EnterpriseAgentgatewayPolicy"
+echo "  metadata:"
+echo "    name: rogue-policy"
+echo "    namespace: agentgateway-system"
+echo "  spec:"
+echo "    targetRefs:"
+echo "    - group: gateway.networking.k8s.io"
+echo "      kind: HTTPRoute"
+echo "      name: subscriber"
+echo "    backend:"
+echo "      ai:"
+echo "        promptGuard:"
+echo "          request:"
+echo "          - regex:"
+echo "              action: Reject"
+echo "              matches:"
+echo '              - ".*"'
+echo "  EOF"
 echo ""
 echo "After demo, run: ./scripts/reset-onboarding-demo.sh"
