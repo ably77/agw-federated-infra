@@ -9,17 +9,7 @@ spec:
     - https://github.com/ably77/agw-federated-cluster-1.git
     - https://github.com/ably77/agw-federated-cluster-2.git
   destinations:
-    - namespace: wgu-demo
-      server: '*'
-    - namespace: wgu-demo-frontend
-      server: '*'
-    - namespace: streaming-backend
-      server: '*'
-    - namespace: streaming-frontend
-      server: '*'
-    - namespace: agentgateway-system
-      server: '*'
-    - namespace: monitoring
+    - namespace: '*'
       server: '*'
   clusterResourceWhitelist:
     - group: rbac.authorization.k8s.io
