@@ -1,26 +1,26 @@
 apiVersion: ratelimit.solo.io/v1alpha1
 kind: RateLimitConfig
 metadata:
-  name: global-rate-limit-config
+  name: gateway-level-rate-limit-config
   namespace: agentgateway-system
 spec:
   raw:
     descriptors:
     - key: generic_key
-      value: global-rate-limit
+      value: gateway-level-rate-limit
       rateLimit:
         requestsPerUnit: 10
         unit: HOUR
     rateLimits:
     - actions:
       - genericKey:
-          descriptorValue: global-rate-limit
+          descriptorValue: gateway-level-rate-limit
       type: TOKEN
 ---
 apiVersion: enterpriseagentgateway.solo.io/v1alpha1
 kind: EnterpriseAgentgatewayPolicy
 metadata:
-  name: global-rate-limit
+  name: gateway-level-rate-limit
   namespace: agentgateway-system
 spec:
   targetRefs:
@@ -31,4 +31,4 @@ spec:
     entRateLimit:
       global:
         rateLimitConfigRefs:
-        - name: global-rate-limit-config
+        - name: gateway-level-rate-limit-config
