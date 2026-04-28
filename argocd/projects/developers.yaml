@@ -13,6 +13,10 @@ spec:
       server: '*'
     - namespace: wgu-demo-frontend
       server: '*'
+    - namespace: streaming-backend
+      server: '*'
+    - namespace: streaming-frontend
+      server: '*'
     - namespace: agentgateway-system
       server: '*'
     - namespace: monitoring
