@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - guardrails.yaml
   - rate-limit.yaml
+  - global-rate-limit.yaml

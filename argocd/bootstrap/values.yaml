@@ -12,7 +12,7 @@ configs:
     applicationsetcontroller.enable.new.git.file.globbing: "true"
   cm:
     helm.enabled: "true"
-    timeout.reconciliation: 180s
+    timeout.reconciliation: 30s
     resource.compareoptions: |
       ignoreResourceStatusField: all
     resource.exclusions: |
