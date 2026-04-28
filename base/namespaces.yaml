@@ -26,3 +26,17 @@ metadata:
   name: solo-enterprise
   labels:
     istio.io/dataplane-mode: ambient
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: streaming-backend
+  labels:
+    istio.io/dataplane-mode: ambient
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: streaming-frontend
+  labels:
+    istio.io/dataplane-mode: ambient
