@@ -179,7 +179,17 @@ argocd_login() {
     kubectl port-forward svc/argocd-server -n argocd 8443:80 \
       --context "$HUB_CTX" &>/dev/null &
     ARGOCD_PF_PID=$!
-    sleep 5
+    echo "Waiting for port-forward to be ready..."
+    for i in $(seq 1 20); do
+      if curl -s -o /dev/null http://localhost:8443 2>/dev/null; then
+        break
+      fi
+      if [ $i -eq 20 ]; then
+        echo "ERROR: Port-forward to ArgoCD not ready after 20s"
+        exit 1
+      fi
+      sleep 1
+    done
 
     argocd login localhost:8443 \
       --username admin \
@@ -346,26 +356,92 @@ EOF
 }
 
 register_clusters_cloud() {
-  argocd_login
-
   for pair in "leaf-1:$LEAF1_CTX" "leaf-2:$LEAF2_CTX"; do
     local leaf_name="${pair%%:*}"
     local leaf_ctx="${pair##*:}"
-    local cluster_repo="https://github.com/ably77/agw-federated-cluster-${leaf_name##leaf-}.git"
+    local leaf_num="${leaf_name##leaf-}"
+    local cluster_repo="https://github.com/ably77/agw-federated-cluster-${leaf_num}.git"
 
-    echo "Registering $leaf_name ($leaf_ctx) via argocd CLI..."
+    echo "Registering $leaf_name ($leaf_ctx) via kubectl secret..."
 
-    argocd cluster add "$leaf_ctx" \
-      --name "$leaf_name" \
-      --label "agw-role=leaf" \
-      --label "agw-leaf-name=${leaf_name}" \
-      --annotation "agw-cluster-repo=${cluster_repo}" \
-      --yes
+    # Create ServiceAccount + RBAC on the leaf cluster
+    kubectl create sa argocd-manager -n kube-system --context "$leaf_ctx" 2>/dev/null || true
+    kubectl apply --context "$leaf_ctx" -f - <<'RBACEOF'
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argocd-manager-role
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+  - nonResourceURLs: ["*"]
+    verbs: ["*"]
+RBACEOF
+    kubectl create clusterrolebinding argocd-manager-role-binding \
+      --clusterrole=argocd-manager-role \
+      --serviceaccount=kube-system:argocd-manager \
+      --context "$leaf_ctx" 2>/dev/null || true
+
+    # Create a long-lived token secret
+    kubectl apply --context "$leaf_ctx" -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argocd-manager-token
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: argocd-manager
+type: kubernetes.io/service-account-token
+EOF
+    sleep 3
+
+    # Get token
+    local token
+    token=$(kubectl get secret argocd-manager-token -n kube-system \
+      --context "$leaf_ctx" -o jsonpath='{.data.token}' | base64 -d)
+
+    # Get server URL (externally routable for EKS/GKE)
+    local server_url
+    server_url=$(get_leaf_server_url "$leaf_ctx")
+    echo "  Server URL: $server_url"
+
+    # Get CA data for TLS verification
+    local cluster_name ca_data
+    cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$leaf_ctx\")].context.cluster}" 2>/dev/null)
+    ca_data=$(kubectl config view --raw -o jsonpath="{.clusters[?(@.name==\"$cluster_name\")].cluster.certificate-authority-data}" 2>/dev/null)
+
+    # Build TLS config -- use CA data if available, otherwise insecure
+    local tls_config
+    if [ -n "$ca_data" ]; then
+      tls_config="{\"bearerToken\": \"${token}\", \"tlsClientConfig\": {\"caData\": \"${ca_data}\"}}"
+    else
+      tls_config="{\"bearerToken\": \"${token}\", \"tlsClientConfig\": {\"insecure\": true}}"
+    fi
+
+    # Create ArgoCD cluster secret on the hub
+    kubectl apply --context "$HUB_CTX" -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${leaf_name}-cluster-secret
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: cluster
+    agw-role: leaf
+    agw-leaf-name: ${leaf_name}
+  annotations:
+    agw-cluster-repo: ${cluster_repo}
+type: Opaque
+stringData:
+  name: ${leaf_name}
+  server: ${server_url}
+  config: |
+    ${tls_config}
+EOF
 
     echo "  $leaf_name registered."
   done
-
-  argocd_logout
 }
 
 # =============================================================================
