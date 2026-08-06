@@ -12,9 +12,39 @@ spec:
     accessLog:
       attributes:
         add:
-        - name: llm.prompt
-          expression: llm.prompt
-        - name: llm.completion
-          expression: 'llm.completion[0]'
-        - name: llm.streaming
-          expression: llm.streaming
+        # --- Request context
+        - name: request_path
+          expression: request.path
+        - name: status_code
+          expression: string(response.code)
+        # --- Latency breakdown: upstream (LLM) vs gateway processing time
+        - name: llm_duration
+          expression: proxy.upstreamDuration
+        - name: request_proc_duration
+          expression: proxy.requestProcessingDuration
+        - name: response_proc_duration
+          expression: proxy.responseProcessingDuration
+        # --- LLM telemetry (default() keeps the field present on non-LLM routes)
+        - name: provider
+          expression: default(llm.provider, "none")
+        - name: model
+          expression: default(llm.responseModel, "none")
+        - name: prompt_tokens
+          expression: string(default(llm.inputTokens, 0))
+        - name: completion_tokens
+          expression: string(default(llm.outputTokens, 0))
+        - name: total_cost_usd
+          expression: string(default(llm.cost.total, 0.0))
+        - name: llm_streaming
+          expression: default(llm.streaming, false)
+        - name: llm_cached_tokens
+          expression: string(default(llm.cachedInputTokens, 0))
+        - name: llm_reasoning_tokens
+          expression: string(default(llm.reasoningTokens, 0))
+        # --- Identity
+        - name: client_ip
+          expression: source.address
+        - name: user_id
+          expression: default(jwt.sub, "anonymous")
+        - name: jwt_all
+          expression: default(jwt, {})

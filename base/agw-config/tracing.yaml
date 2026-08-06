@@ -18,7 +18,19 @@ spec:
       randomSampling: "true"
       attributes:
         add:
-        - name: jwt
-          expression: jwt
-        - name: response.body
-          expression: json(response.body)
+        # --- Identity: subject of the verified JWT if a JWT policy is enabled
+        - name: enduser.id
+          expression: 'default(jwt.sub, "anonymous")'
+        # --- LLM telemetry
+        - name: llm.is_streaming
+          expression: 'default(llm.streaming, false)'
+        - name: llm.usage.cached_tokens
+          expression: 'default(llm.cachedInputTokens, 0)'
+        - name: llm.usage.reasoning_tokens
+          expression: 'default(llm.reasoningTokens, 0)'
+        # First user message in the prompt (perf impact for large prompts)
+        - name: llm.prompt.user
+          expression: 'default(llm.prompt.filter(m, m.role == "user")[0].content, "")'
+        # LLM response content (perf impact for large responses)
+        - name: llm.completion.output
+          expression: 'default(llm.completion[0], "")'
