@@ -789,7 +789,7 @@ print_access_info() {
   if [ "$PLATFORM" = "eks" ] || [ "$PLATFORM" = "gke" ]; then
     echo "Ingress Gateway (leaf-1):"
     local lb_addr
-    lb_addr=$(get_lb_address ingress agentgateway-system "$LEAF1_CTX")
+    lb_addr=$(get_lb_address ingress agentgateway-ingress "$LEAF1_CTX")
     echo "  LoadBalancer: $lb_addr"
     if [[ "$lb_addr" == *".elb."* || "$lb_addr" == *".amazonaws.com"* ]]; then
       echo "  EKS NLB detected -- resolve hostname to IP for /etc/hosts:"

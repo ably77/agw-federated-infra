@@ -2,7 +2,7 @@ apiVersion: enterpriseagentgateway.solo.io/v1alpha1
 kind: EnterpriseAgentgatewayParameters
 metadata:
   name: ingress-agentgateway-config
-  namespace: agentgateway-system
+  namespace: agentgateway-ingress
 spec:
   logging:
     level: info

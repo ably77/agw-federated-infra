@@ -26,3 +26,10 @@ metadata:
   name: solo-enterprise
   labels:
     istio.io/dataplane-mode: ambient
+---
+# Home of the ingress Gateway, separate from the agentgateway-proxy LLM
+# gateway and its policies in agentgateway-system (created by the AGW apps).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agentgateway-ingress

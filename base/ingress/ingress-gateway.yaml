@@ -2,7 +2,7 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: ingress
-  namespace: agentgateway-system
+  namespace: agentgateway-ingress
 spec:
   gatewayClassName: enterprise-agentgateway
   infrastructure:
