@@ -54,7 +54,7 @@ team-streaming/
     kustomization.yaml
     httproute-openai.yaml        # /openai route referencing shared openai backend
     httproute-mcp.yaml           # /analytics-mcp route referencing platform-provisioned MCP backend
-    ingress-routes.yaml          # subscriber.glootest.com -> chatbot
+    ingress-routes.yaml          # subscriber.try-solo.io -> chatbot
     reference-grant.yaml         # cross-namespace references (agw <-> streaming namespaces)
   policies/
     kustomization.yaml
@@ -100,7 +100,7 @@ kustomization.yaml               # UPDATED: add team-streaming alongside team-en
 
 ### PR 5 (cluster-1 repo): "Add routes and ingress"
 
-**Changes:** `team-streaming/routes/` with HTTPRoutes for OpenAI (`/openai` -> openai backend) and MCP (`/analytics-mcp` -> analytics-mcp-backend), ingress route (`subscriber.glootest.com` -> chatbot:8501), and ReferenceGrants for cross-namespace access.
+**Changes:** `team-streaming/routes/` with HTTPRoutes for OpenAI (`/openai` -> openai backend) and MCP (`/analytics-mcp` -> analytics-mcp-backend), ingress route (`subscriber.try-solo.io` -> chatbot:8501), and ReferenceGrants for cross-namespace access.
 
 **Demo moment:** "Now the developer wires up routing. They reference the shared OpenAI backend and their MCP backend -- both provisioned by the platform team. The ReferenceGrant allows cross-namespace references. At this point the app is fully functional and guardrails are already active."
 
@@ -194,7 +194,7 @@ The streaming-services app manifests live at `/Users/alexly-solo/Desktop/solo/so
 - **Route (`k8s/gateway/route.yaml`):** Adapted into `httproute-openai.yaml` -- references the shared `openai` backend.
 - **MCP backend + route (`k8s/gateway/mcp-backend.yaml`):** Route portion adapted into `httproute-mcp.yaml` -- references the platform-provisioned `analytics-mcp-backend`.
 - **Services (`k8s/services/*.yaml`):** Copied into `team-streaming/services/` with minor adjustments.
-- **Ingress routes (`k8s/gateway/ingress-routes.yaml`):** Adapted into `ingress-routes.yaml` with `subscriber.glootest.com` hostname.
+- **Ingress routes (`k8s/gateway/ingress-routes.yaml`):** Adapted into `ingress-routes.yaml` with `subscriber.try-solo.io` hostname.
 - **Ext-authz (`k8s/gateway/ext-authz.yaml`):** Not included -- out of scope for this demo.
 - **Mesh policies (`k8s/mesh/*.yaml`):** Not included -- mesh is out of scope for this demo.
 - **Observability (`k8s/observability/`):** Not included -- monitoring is already provided by the platform.

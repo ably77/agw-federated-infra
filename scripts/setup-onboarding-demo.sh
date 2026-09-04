@@ -109,7 +109,7 @@ Wire up the MCP route and ingress for the streaming team.
 
 **Routes added:**
 - HTTPRoute `analytics-mcp` -- /analytics-mcp path to platform-provisioned MCP backend
-- HTTPRoute `streaming-chatbot-ingress-route` -- subscriber.glootest.com to chatbot
+- HTTPRoute `streaming-chatbot-ingress-route` -- subscriber.try-solo.io to chatbot
 - ReferenceGrants for cross-namespace access
 
 The chatbot uses the platform-provided `/openai` route for LLM access (guardrails already active). The developer only needs to add the MCP route for their analytics tools and the ingress route for user access.
@@ -117,7 +117,7 @@ The chatbot uses the platform-provided `/openai` route for LLM access (guardrail
 **Demo talking point:** The developer wires up their MCP tools and ingress. They reference the platform-provisioned MCP backend. The LLM route is already provided by the platform with guardrails active. At this point the app is fully functional. Try sending a credit card number -- it gets blocked with zero config from the developer.
 
 **Live test after merge:**
-1. Open subscriber.glootest.com (or port-forward to streaming-backend-chatbot:8501)
+1. Open subscriber.try-solo.io (or port-forward to streaming-backend-chatbot:8501)
 2. Ask the chatbot a question -- works
 3. Try: "My credit card is 4111-1111-1111-1111" -- blocked by guardrails
 4. Point out: zero guardrail config from the developer

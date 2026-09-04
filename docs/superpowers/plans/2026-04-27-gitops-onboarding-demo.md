@@ -39,7 +39,7 @@
 | Create | `team-streaming/routes/kustomization.yaml` | Route resources list |
 | Create | `team-streaming/routes/httproute-openai.yaml` | /openai -> shared openai backend |
 | Create | `team-streaming/routes/httproute-mcp.yaml` | /analytics-mcp -> platform MCP backend |
-| Create | `team-streaming/routes/ingress-routes.yaml` | subscriber.glootest.com -> chatbot |
+| Create | `team-streaming/routes/ingress-routes.yaml` | subscriber.try-solo.io -> chatbot |
 | Create | `team-streaming/routes/reference-grant.yaml` | Cross-namespace grants |
 | Create | `team-streaming/policies/kustomization.yaml` | Policy resources list |
 | Create | `team-streaming/policies/chatbot-rbac.yaml` | ClusterRole + binding for demo UI |
@@ -717,7 +717,7 @@ metadata:
   namespace: streaming-frontend
 spec:
   hostnames:
-  - "subscriber.glootest.com"
+  - "subscriber.try-solo.io"
   parentRefs:
   - name: ingress
     namespace: agentgateway-system
@@ -1122,13 +1122,13 @@ Wire up agentgateway routing and ingress for the streaming team.
 **Routes added:**
 - HTTPRoute `subscriber` -- /openai path to shared OpenAI backend (120s timeout)
 - HTTPRoute `analytics-mcp` -- /analytics-mcp path to platform-provisioned MCP backend
-- HTTPRoute `streaming-chatbot-ingress-route` -- subscriber.glootest.com to chatbot
+- HTTPRoute `streaming-chatbot-ingress-route` -- subscriber.try-solo.io to chatbot
 - ReferenceGrants for cross-namespace access
 
 **Demo talking point:** The developer wires up routing. They reference the shared OpenAI backend and their MCP backend -- both provisioned by the platform team. At this point the app is fully functional and guardrails are already active. Try sending a credit card number -- it gets blocked.
 
 **Live test after merge:**
-1. Open subscriber.glootest.com (or port-forward)
+1. Open subscriber.try-solo.io (or port-forward)
 2. Ask the chatbot a question -- works
 3. Try: "My credit card is 4111-1111-1111-1111" -- blocked by guardrails
 4. Point out: zero guardrail config from the developer

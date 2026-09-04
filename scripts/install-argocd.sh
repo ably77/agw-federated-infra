@@ -796,7 +796,7 @@ print_access_info() {
       echo "    nslookup $lb_addr"
     fi
     echo "  Add to /etc/hosts:"
-    echo "    <LB_IP> enroll.glootest.com grafana.glootest.com"
+    echo "    <LB_IP> enroll.try-solo.io grafana.try-solo.io"
     echo ""
   fi
 
