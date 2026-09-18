@@ -4,7 +4,7 @@ set -euo pipefail
 # AGW Federated GitOps -- ArgoCD Bootstrap Script
 # Installs ArgoCD on the hub cluster and registers leaf clusters.
 #
-# Supported platforms: Colima (local k3s), EKS, GKE
+# Supported platforms: Colima (local k3s), vind (vclusters in Docker), EKS, GKE
 # Platform is auto-detected from kubeconfig API server URLs.
 #
 # Prerequisites:
@@ -12,6 +12,7 @@ set -euo pipefail
 #   - SOLO_TRIAL_LICENSE_KEY and OPENAI_API_KEY environment variables set
 #   - helm, kubectl, argocd CLI installed
 #   - For Colima: colima CLI installed
+#   - For vind: docker CLI installed
 #
 # Usage:
 #   export SOLO_TRIAL_LICENSE_KEY=<key>
@@ -34,12 +35,28 @@ detect_platform() {
   local ctx=$1
   local server
   server=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$ctx\")].context.cluster}")\")].cluster.server}" 2>/dev/null)
+  local cluster_name
+  cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$ctx\")].context.cluster}" 2>/dev/null)
   case "$server" in
     *.eks.amazonaws.com*) echo "eks" ;;
     *.gke.goog*|*.googleapis.com*) echo "gke" ;;
-    *127.0.0.1*|*localhost*) echo "colima" ;;
+    *127.0.0.1*|*localhost*)
+      # Both Colima and vind expose the API server on localhost. vind clusters
+      # come from vcluster-docker, whose kubeconfig clusters are named
+      # "vcluster-docker_<profile>".
+      case "$cluster_name" in
+        vcluster-docker_*) echo "vind" ;;
+        *) echo "colima" ;;
+      esac
+      ;;
     *) echo "unknown" ;;
   esac
+}
+
+# Platforms whose API server URLs are localhost-only and therefore need a
+# rewritten, in-cluster-reachable server URL when registering leaf clusters.
+is_local_platform() {
+  [ "$PLATFORM" = "colima" ] || [ "$PLATFORM" = "vind" ]
 }
 
 PLATFORM=""  # Set during validation
@@ -83,6 +100,12 @@ validate() {
     colima)
       if ! command -v colima &>/dev/null; then
         echo "ERROR: colima not found. Please install it."
+        exit 1
+      fi
+      ;;
+    vind)
+      if ! command -v docker &>/dev/null; then
+        echo "ERROR: docker not found. Please install it."
         exit 1
       fi
       ;;
@@ -227,10 +250,36 @@ get_leaf_server_url() {
   leaf_platform=$(detect_platform "$leaf_ctx")
 
   # EKS/GKE: kubeconfig server URL is already externally routable
-  if [ "$leaf_platform" != "colima" ]; then
+  if [ "$leaf_platform" != "colima" ] && [ "$leaf_platform" != "vind" ]; then
     local cluster_name
     cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$leaf_ctx\")].context.cluster}" 2>/dev/null)
     kubectl config view -o jsonpath="{.clusters[?(@.name==\"$cluster_name\")].cluster.server}" 2>/dev/null
+    return
+  fi
+
+  local cluster_name
+  cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$leaf_ctx\")].context.cluster}" 2>/dev/null)
+
+  if [ "$leaf_platform" = "vind" ]; then
+    # vind: the leaf control plane is a Docker container on a shared Docker
+    # network. Hub pods cannot use the published localhost port, so address the
+    # container's IP on that network + the in-container API port (8443).
+    local vind_profile container ip
+    vind_profile="${cluster_name#vcluster-docker_}"
+    container="vcluster.cp.${vind_profile}"
+
+    if ! docker inspect "$container" &>/dev/null; then
+      echo "ERROR: Cannot find vind control-plane container '$container' for $leaf_ctx" >&2
+      return 1
+    fi
+
+    ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$container" 2>/dev/null | awk '{print $1}')
+    if [ -z "$ip" ]; then
+      echo "ERROR: Cannot determine Docker IP for $container ($leaf_ctx)" >&2
+      return 1
+    fi
+
+    echo "https://${ip}:8443"
     return
   fi
 
@@ -247,8 +296,6 @@ get_leaf_server_url() {
   fi
 
   # Get k3s API port from kubeconfig (the port forwarded into the VM)
-  local cluster_name
-  cluster_name=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"$leaf_ctx\")].context.cluster}" 2>/dev/null)
   local server_url
   server_url=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$cluster_name\")].cluster.server}" 2>/dev/null)
   api_port=$(echo "$server_url" | sed 's|.*:\([0-9]*\)$|\1|')
@@ -258,15 +305,15 @@ get_leaf_server_url() {
 
 # =============================================================================
 # Register leaf clusters with ArgoCD
-#   - Colima: create cluster secrets directly (argocd cluster add fails
+#   - Colima/vind: create cluster secrets directly (argocd cluster add fails
 #     because it stores localhost URLs unreachable from ArgoCD pods)
 #   - EKS/GKE: use argocd cluster add (server URLs are externally routable)
 # =============================================================================
 register_clusters() {
   echo "=== Registering leaf clusters with ArgoCD ==="
 
-  if [ "$PLATFORM" = "colima" ]; then
-    register_clusters_colima
+  if is_local_platform; then
+    register_clusters_local
   else
     register_clusters_cloud
   fi
@@ -274,7 +321,7 @@ register_clusters() {
   echo "Leaf clusters registered."
 }
 
-register_clusters_colima() {
+register_clusters_local() {
   for pair in "leaf-1:$LEAF1_CTX" "leaf-2:$LEAF2_CTX"; do
     local leaf_name="${pair%%:*}"
     local leaf_ctx="${pair##*:}"
